@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { PropertyListing, TenureType, ListingStatus, RenewStatus } from '../../types';
-import { Building2, X, Check, Calendar, MapPin, User, Layers, Shield } from 'lucide-react';
+import { PropertyListing, TenureType, ListingStatus, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from '../../types';
+import { Building2, X, Check, Calendar, MapPin, User, Layers, Shield, Clock, AlertTriangle, UserCheck, Tag } from 'lucide-react';
+import { getDateStatusInfo, isDatePassed } from '../../utils/dateUtils';
+import { useAuth } from '../../context/AuthContext';
 
 interface ListingFormModalProps {
   isOpen: boolean;
@@ -17,8 +19,10 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
   onSave,
   nextId,
 }) => {
+  const { userName, currentUser } = useAuth();
   const [formData, setFormData] = useState<Partial<PropertyListing>>({
     property: '',
+    projectCategory: 'Project Marketing (PM)',
     location: '',
     tenure: 'Freehold',
     pm: '',
@@ -30,24 +34,44 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
 
   useEffect(() => {
     if (listingToEdit) {
-      setFormData(listingToEdit);
+      const hasDate = listingToEdit.date && listingToEdit.date.trim() !== '-' && listingToEdit.date.trim() !== '';
+      const isPassed = hasDate ? isDatePassed(listingToEdit.date) : false;
+      setFormData({
+        ...listingToEdit,
+        projectCategory: listingToEdit.projectCategory || 'Project Marketing (PM)',
+        status: hasDate ? (isPassed ? 'Expired' : 'Active') : listingToEdit.status,
+      });
     } else {
       const now = new Date();
+      const defaultDate = `${now.getDate()}.${now.getMonth() + 1}`;
       setFormData({
         id: nextId,
         property: '',
+        projectCategory: 'Project Marketing (PM)',
         location: '',
         tenure: 'Freehold',
         pm: '',
         availableUnits: '',
         status: 'Active',
-        date: `${now.getDate()}.${now.getMonth() + 1}`,
+        date: defaultDate,
         renewStatus: 'Renewed',
       });
     }
   }, [listingToEdit, nextId, isOpen]);
 
   if (!isOpen) return null;
+
+  const dateStatus = getDateStatusInfo(formData.date || '');
+
+  const handleDateChange = (newDate: string) => {
+    const hasDate = newDate && newDate.trim() !== '-' && newDate.trim() !== '';
+    const isPassed = hasDate ? isDatePassed(newDate) : false;
+    setFormData((prev) => ({
+      ...prev,
+      date: newDate,
+      status: hasDate ? (isPassed ? 'Expired' : 'Active') : prev.status,
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,16 +80,25 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
       return;
     }
 
+    const dateStr = formData.date?.trim() || `${new Date().getDate()}.${new Date().getMonth() + 1}`;
+    const hasDate = dateStr !== '-' && dateStr !== '';
+    const dateHasPassed = hasDate ? isDatePassed(dateStr) : false;
+    const computedStatus = hasDate ? (dateHasPassed ? 'Expired' : 'Active') : (formData.status as ListingStatus) || 'Active';
+
     const payload: PropertyListing = {
       id: formData.id || nextId,
       property: formData.property.trim(),
+      projectCategory: (formData.projectCategory as ProjectCategory) || 'Project Marketing (PM)',
       location: formData.location?.trim() || '-',
       tenure: formData.tenure || '-',
       pm: formData.pm?.trim() || '-',
       availableUnits: formData.availableUnits?.trim() || '-',
-      status: (formData.status as ListingStatus) || 'Active',
-      date: formData.date?.trim() || `${new Date().getDate()}.${new Date().getMonth() + 1}`,
+      status: computedStatus,
+      date: dateStr,
       renewStatus: (formData.renewStatus as RenewStatus) || 'Not Renewed',
+      updatedByName: userName || 'Team Member',
+      updatedByEmail: currentUser?.email || undefined,
+      lastUpdatedAt: new Date().toISOString(),
     };
 
     onSave(payload);
@@ -102,19 +135,39 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[70vh]">
-          {/* Property Name */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-700">
-              Property / Project Name <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.property || ''}
-              onChange={(e) => setFormData({ ...formData, property: e.target.value })}
-              placeholder="e.g. Service Apartment Linkar 52"
-              className="text-xs p-2.5 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-semibold text-slate-900"
-            />
+          {/* Property Name & Project Category */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2 flex flex-col gap-1">
+              <label className="text-xs font-bold text-slate-700">
+                Property / Project Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.property || ''}
+                onChange={(e) => setFormData({ ...formData, property: e.target.value })}
+                placeholder="e.g. Service Apartment Linkar 52"
+                className="text-xs p-2.5 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-semibold text-slate-900"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                <Tag className="w-3 h-3 text-indigo-500" />
+                Project Category <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={formData.projectCategory || 'Project Marketing (PM)'}
+                onChange={(e) => setFormData({ ...formData, projectCategory: e.target.value as ProjectCategory })}
+                className="text-xs p-2.5 border border-slate-300 rounded-lg outline-none bg-white focus:border-indigo-500 font-medium text-slate-800 cursor-pointer"
+              >
+                {PROJECT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Location & PM */}
@@ -186,67 +239,128 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
           </div>
 
           {/* Status, Date, Renew Status */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 border-t border-slate-100">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-slate-700">Lifecycle Status</label>
-              <select
-                value={formData.status || 'Active'}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value as ListingStatus })
-                }
-                className="text-xs p-2 border border-slate-300 rounded-lg outline-none bg-white font-semibold cursor-pointer"
-              >
-                <option value="Active">Active</option>
-                <option value="Expired">Expired</option>
-              </select>
+          <div className="flex flex-col gap-3 pt-1 border-t border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>Lifecycle Status</span>
+                  {formData.date && formData.date.trim() !== '-' && formData.date.trim() !== '' && (
+                    dateStatus.isPassed ? (
+                      <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                        Auto-Expired
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        Auto-Active
+                      </span>
+                    )
+                  )}
+                </label>
+                <select
+                  value={dateStatus.isPassed ? 'Expired' : formData.status || 'Active'}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value as ListingStatus })
+                  }
+                  className="text-xs p-2 border rounded-lg outline-none font-semibold cursor-pointer bg-white text-slate-900 border-slate-300 focus:border-indigo-500"
+                  title="Lifecycle status is automatically calculated based on the milestone date"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Expired">Expired</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-slate-400" />
+                  Date (DD.MM)
+                </label>
+                <input
+                  type="text"
+                  value={formData.date || ''}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  placeholder="e.g. 26.10"
+                  className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-slate-700">Renewal Status</label>
+                <select
+                  value={formData.renewStatus || 'Renewed'}
+                  onChange={(e) =>
+                    setFormData({ ...formData, renewStatus: e.target.value as RenewStatus })
+                  }
+                  className="text-xs p-2 border border-slate-300 rounded-lg outline-none bg-white font-medium cursor-pointer"
+                >
+                  <option value="Renewed">Renewed</option>
+                  <option value="Want to be renew">Want to be renew</option>
+                  <option value="Not Renewed">Not Renewed</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-slate-400" />
-                Date (DD.MM)
-              </label>
-              <input
-                type="text"
-                value={formData.date || ''}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                placeholder="e.g. 26.10"
-                className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-slate-700">Renewal Status</label>
-              <select
-                value={formData.renewStatus || 'Renewed'}
-                onChange={(e) =>
-                  setFormData({ ...formData, renewStatus: e.target.value as RenewStatus })
-                }
-                className="text-xs p-2 border border-slate-300 rounded-lg outline-none bg-white font-medium cursor-pointer"
+            {/* Live Expiry Status Notification */}
+            {formData.date && (
+              <div
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
+                  dateStatus.isPassed
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : dateStatus.isToday
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}
               >
-                <option value="Renewed">Renewed</option>
-                <option value="Want to be renew">Want to be renew</option>
-                <option value="Not Renewed">Not Renewed</option>
-              </select>
-            </div>
+                {dateStatus.isPassed ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                ) : (
+                  <Clock className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
+                <div>
+                  <span className="font-bold">
+                    {dateStatus.isPassed ? 'Date has passed:' : 'Date status:'}
+                  </span>{' '}
+                  <span className="font-medium">
+                    {dateStatus.badgeLabel}
+                  </span>
+                  {dateStatus.isPassed ? (
+                    <span className="block text-[11px] text-rose-600 mt-0.5">
+                      System automatically marks this listing as <strong>Expired</strong>. Update to a future date to re-activate.
+                    </span>
+                  ) : (
+                    <span className="block text-[11px] text-emerald-700 mt-0.5">
+                      Date has not passed yet. System automatically marks this listing as <strong>Active</strong>.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer actions */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 mt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Check className="w-4 h-4" />
-              <span>{listingToEdit ? 'Save Changes' : 'Create Listing'}</span>
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-200 mt-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+              <span>
+                Saving as: <strong className="text-slate-800">{userName || 'Team Member'}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>{listingToEdit ? 'Save Changes' : 'Create Listing'}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

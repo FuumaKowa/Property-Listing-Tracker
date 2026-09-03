@@ -3,6 +3,15 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { optionalAuth, requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import {
+  getAllListingsFromDb,
+  createListingInDb,
+  updateListingInDb,
+  deleteListingFromDb,
+  getAuditLogs,
+  getOrCreateUser,
+} from './src/db/listings.ts';
 
 dotenv.config();
 
@@ -49,6 +58,7 @@ app.post('/api/gemini/extract', async (req: Request, res: Response) => {
   try {
     const prompt = `You are a real estate database assistant. Extract real estate property listing information from the provided raw text into a structured JSON array of listings matching this exact schema:
 - Property (string): The property development or project name (e.g. "Service Apartment Linkar 52")
+- Project_Category (string): One of: "Project Marketing (PM)", "Rental", "Subsale CoA (SSCOA)", "Subsale Direct Listing (SSDL)", "Million Dollar Property (MD)", or "Auction"
 - Location (string): Town, district, or city with state if identifiable (e.g. "Shah Alam, Selangor")
 - Tenure (string): "Freehold", "Leasehold", "Freehold Malay Reserved", or "-"
 - PM (string): The assigned Project Manager / agent (e.g. "Haneah", "Benik", "Akram/Benik/Fb")
@@ -76,6 +86,17 @@ Return a JSON array of extracted listings.`;
             type: Type.OBJECT,
             properties: {
               Property: { type: Type.STRING },
+              Project_Category: {
+                type: Type.STRING,
+                enum: [
+                  'Project Marketing (PM)',
+                  'Rental',
+                  'Subsale CoA (SSCOA)',
+                  'Subsale Direct Listing (SSDL)',
+                  'Million Dollar Property (MD)',
+                  'Auction',
+                ],
+              },
               Location: { type: Type.STRING },
               Tenure: { type: Type.STRING },
               PM: { type: Type.STRING },
@@ -94,6 +115,7 @@ Return a JSON array of extracted listings.`;
     const parsed = JSON.parse(response.text || '[]');
     const normalized = parsed.map((item: any) => ({
       property: item.Property || 'Unnamed Property',
+      projectCategory: item.Project_Category || 'Project Marketing (PM)',
       location: item.Location || '-',
       tenure: item.Tenure || '-',
       pm: item.PM || '-',
@@ -148,6 +170,7 @@ You have real-time access to the user's active property listing database (${(tab
 Data Schema:
 - id (number): unique identifier
 - property (string): property/project name
+- projectCategory (string): One of: "Project Marketing (PM)", "Rental", "Subsale CoA (SSCOA)", "Subsale Direct Listing (SSDL)", "Million Dollar Property (MD)", or "Auction"
 - location (string): city, district, state
 - tenure (string): Freehold, Leasehold, Freehold Malay Reserved, or -
 - pm (string): Project Manager / team
@@ -395,8 +418,16 @@ function heuristicExtract(text: string): any[] {
   const d = new Date();
   const dateStr = `${d.getDate()}.${d.getMonth() + 1}`;
 
+  let category: string = 'Project Marketing (PM)';
+  if (/auction/i.test(text)) category = 'Auction';
+  else if (/rental|rent|lease/i.test(text)) category = 'Rental';
+  else if (/subsale\s*coa|sscoa/i.test(text)) category = 'Subsale CoA (SSCOA)';
+  else if (/direct\s*listing|ssdl/i.test(text)) category = 'Subsale Direct Listing (SSDL)';
+  else if (/million\s*dollar|md\s*property/i.test(text)) category = 'Million Dollar Property (MD)';
+
   results.push({
     property: propertyName,
+    projectCategory: category,
     location: location,
     tenure: tenure,
     pm: pm,
@@ -514,6 +545,119 @@ function localStandardize(listing: any) {
     suggestedChanges: changes.length > 0 ? changes : ['Already standard format'],
   };
 }
+
+// ==========================================
+// Cloud SQL & Audit Trail Endpoints
+// ==========================================
+
+// Helper to extract user attribution info from request (Firebase Auth or guest header/body)
+function extractUserInfo(req: AuthRequest) {
+  if (req.user) {
+    return {
+      uid: req.user.uid,
+      name: (req.user.name as string) || (req.user.email ? (req.user.email as string).split('@')[0] : 'Authenticated User'),
+      email: (req.user.email as string) || undefined,
+    };
+  }
+
+  // Fallback: client-provided user name from profile or header
+  const headerName = req.headers['x-user-name'] as string;
+  const headerEmail = req.headers['x-user-email'] as string;
+  const bodyName = req.body?.updatedByName || req.body?.userName;
+  const bodyEmail = req.body?.updatedByEmail || req.body?.userEmail;
+
+  return {
+    name: headerName || bodyName || 'Team Member',
+    email: headerEmail || bodyEmail || undefined,
+  };
+}
+
+// 1. Sync / Register user in Cloud SQL
+app.post('/api/users/sync', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { uid, email, displayName, photoUrl } = req.body;
+    const userUid = req.user?.uid || uid;
+    const userEmail = req.user?.email || email;
+
+    if (!userUid || !userEmail) {
+      return res.status(400).json({ error: 'UID and email are required' });
+    }
+
+    const user = await getOrCreateUser(userUid, userEmail, displayName, photoUrl);
+    res.json({ success: true, user });
+  } catch (error: any) {
+    console.error('Failed to sync user:', error);
+    res.status(500).json({ error: error.message || 'Failed to sync user' });
+  }
+});
+
+// 2. Get all listings from Cloud SQL
+app.get('/api/listings', async (req: Request, res: Response) => {
+  try {
+    const data = await getAllListingsFromDb();
+    res.json({ success: true, data });
+  } catch (error: any) {
+    console.error('Failed to fetch listings from Cloud SQL:', error);
+    res.status(500).json({ error: 'Failed to fetch listings from database' });
+  }
+});
+
+// 3. Create listing with user name and timestamp attribution
+app.post('/api/listings', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userInfo = extractUserInfo(req);
+    const created = await createListingInDb(req.body, userInfo);
+    res.status(201).json({ success: true, data: created });
+  } catch (error: any) {
+    console.error('Failed to create listing:', error);
+    res.status(500).json({ error: 'Failed to create listing in database' });
+  }
+});
+
+// 4. Update listing with user name and timestamp attribution
+app.patch('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid listing ID' });
+    }
+
+    const userInfo = extractUserInfo(req);
+    const updated = await updateListingInDb(id, req.body, userInfo);
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error(`Failed to update listing ${req.params.id}:`, error);
+    res.status(500).json({ error: 'Failed to update listing in database' });
+  }
+});
+
+// 5. Delete listing
+app.delete('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid listing ID' });
+    }
+
+    await deleteListingFromDb(id);
+    res.json({ success: true, message: `Listing ${id} deleted` });
+  } catch (error: any) {
+    console.error(`Failed to delete listing ${req.params.id}:`, error);
+    res.status(500).json({ error: 'Failed to delete listing from database' });
+  }
+});
+
+// 6. Get audit logs for traceability
+app.get('/api/audit-logs', async (req: Request, res: Response) => {
+  try {
+    const listingIdParam = req.query.listingId ? parseInt(req.query.listingId as string, 10) : undefined;
+    const logs = await getAuditLogs(listingIdParam);
+    res.json({ success: true, data: logs });
+  } catch (error: any) {
+    console.error('Failed to fetch audit logs:', error);
+    res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+});
 
 // Serve static assets in production
 app.use(express.static(path.join(__dirname, 'dist')));

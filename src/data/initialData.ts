@@ -4,6 +4,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 1,
     property: 'Ss Taman Kenanga',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Sabak Bernam, Selangor',
     tenure: 'Freehold',
     pm: 'Benik',
@@ -15,6 +16,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 2,
     property: 'Ds First Vista',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Sabak Bernam, Selangor',
     tenure: 'Freehold',
     pm: 'Akram/Benik/Fb',
@@ -26,6 +28,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 3,
     property: 'Ss Taman Dorani Sejahtera',
+    projectCategory: 'Subsale Direct Listing (SSDL)',
     location: 'Sungai Besar, Selangor',
     tenure: 'Freehold',
     pm: 'Sariza',
@@ -37,6 +40,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 4,
     property: 'Galaxy Avenue Shoplot',
+    projectCategory: 'Rental',
     location: 'Puncak Alam',
     tenure: '-',
     pm: 'Shazni',
@@ -48,6 +52,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 5,
     property: 'Ds Taman Satria',
+    projectCategory: 'Subsale CoA (SSCOA)',
     location: 'Teluk Panglima Garang, Selangor',
     tenure: 'Leasehold',
     pm: 'Akram',
@@ -59,6 +64,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 6,
     property: 'Bungalow Desa Bukit Kerayong',
+    projectCategory: 'Million Dollar Property (MD)',
     location: 'Puncak Alam, Selangor',
     tenure: 'Leasehold',
     pm: 'Benik',
@@ -70,6 +76,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 7,
     property: 'Semi D Taman Dato Harun',
+    projectCategory: 'Auction',
     location: 'Pulau Indah, Klang, Selangor',
     tenure: 'Freehold',
     pm: 'Akram',
@@ -81,6 +88,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 8,
     property: 'APT E-sentral Smart City',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Subang Bestari, Shah Alam, Selangor',
     tenure: '-',
     pm: 'Nor Ozir',
@@ -92,6 +100,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 9,
     property: 'Astana',
+    projectCategory: 'Subsale CoA (SSCOA)',
     location: 'Chemor, Perak',
     tenure: '-',
     pm: 'Fahmy Osman',
@@ -103,6 +112,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 10,
     property: 'Santorini Apartment @ Botani',
+    projectCategory: 'Rental',
     location: 'Ipoh, Perak',
     tenure: '-',
     pm: 'Fahmy Osman',
@@ -114,6 +124,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 11,
     property: 'Ss J3 Residence, Jenderam Lestari',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Jenderam Hilir, Dengkil, Selangor',
     tenure: 'Freehold Malay Reserved',
     pm: 'Zuraini',
@@ -125,6 +136,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 12,
     property: 'Ss J2 Residence, Jenderam Lestari',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Jenderam Hilir, Dengkil, Selangor',
     tenure: 'Freehold Malay Reserved',
     pm: 'Zuraini',
@@ -136,6 +148,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 13,
     property: 'Bungalow Indahville 2',
+    projectCategory: 'Million Dollar Property (MD)',
     location: 'Pulau Indah, Klang, Selangor',
     tenure: 'Freehold Malay Reserved',
     pm: 'Zuraini',
@@ -147,6 +160,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 14,
     property: 'Ss Indahville 4',
+    projectCategory: 'Subsale Direct Listing (SSDL)',
     location: 'Pulau Indah, Klang, Selangor',
     tenure: 'Freehold Malay Reserved',
     pm: 'Zuraini',
@@ -158,6 +172,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 15,
     property: 'Double Storey Pavonia',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Bukit Bandaraya, Shah Alam, Selangor',
     tenure: '-',
     pm: 'Haneah',
@@ -169,6 +184,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 16,
     property: 'Bungalow Amber 1 & 2',
+    projectCategory: 'Million Dollar Property (MD)',
     location: 'Subang Bestari, Shah Alam, Selangor',
     tenure: '-',
     pm: 'Haneah',
@@ -180,6 +196,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 17,
     property: 'Service Apartment Linkar 52',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Shah Alam',
     tenure: '-',
     pm: 'Haneah',
@@ -191,6 +208,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 18,
     property: 'Dsth Tamanhijrah',
+    projectCategory: 'Auction',
     location: 'Rantau Panjang Klang',
     tenure: '-',
     pm: 'Dsn / Iza',
@@ -202,6 +220,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 19,
     property: 'Residensi Perintis Satu',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Seksyen 29, Shah Alam',
     tenure: '-',
     pm: 'Che Mad',
@@ -213,6 +232,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 20,
     property: 'Residensi Bayu Timur Condo',
+    projectCategory: 'Rental',
     location: 'Seksyen 32, Shah Alam',
     tenure: '-',
     pm: 'Che Mad',
@@ -224,6 +244,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 21,
     property: 'Sssd Tmn Desa Idaman',
+    projectCategory: 'Subsale CoA (SSCOA)',
     location: 'Olak Lempit Banting',
     tenure: 'Freehold Malay Reserved',
     pm: 'Nor Ozir',
@@ -235,6 +256,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 22,
     property: 'Ss Taman Kelana',
+    projectCategory: 'Auction',
     location: 'Kapar',
     tenure: 'Leasehold',
     pm: 'Nor Ozir',
@@ -246,6 +268,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 23,
     property: 'Double Storey Tmn Orchid',
+    projectCategory: 'Subsale Direct Listing (SSDL)',
     location: 'Meru Klang',
     tenure: '-',
     pm: 'Sariza',
@@ -257,6 +280,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 24,
     property: 'Double Storey Terrace Tenera',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Semenyih',
     tenure: '-',
     pm: 'SAM Lai',
@@ -268,6 +292,7 @@ export const INITIAL_PROPERTY_LISTINGS: PropertyListing[] = [
   {
     id: 25,
     property: 'Rsku',
+    projectCategory: 'Project Marketing (PM)',
     location: 'Shah Alam U9',
     tenure: '-',
     pm: 'Dsn / Ikhwan',

@@ -1,5 +1,6 @@
 import { PropertyListing } from '../types';
 import { INITIAL_PROPERTY_LISTINGS } from '../data/initialData';
+import { autoExpireListings } from './dateUtils';
 
 const STORAGE_KEY = 'property_listing_tracker_data_v2';
 
@@ -9,13 +10,15 @@ export function loadListings(): PropertyListing[] {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const { updatedListings } = autoExpireListings(parsed);
+        return updatedListings;
       }
     }
   } catch (e) {
     console.error('Failed to load listings from storage', e);
   }
-  return INITIAL_PROPERTY_LISTINGS;
+  const { updatedListings } = autoExpireListings(INITIAL_PROPERTY_LISTINGS);
+  return updatedListings;
 }
 
 export function saveListings(listings: PropertyListing[]): void {
@@ -32,14 +35,16 @@ export function resetListings(): PropertyListing[] {
   } catch (e) {
     // ignore
   }
-  return INITIAL_PROPERTY_LISTINGS;
+  const { updatedListings } = autoExpireListings(INITIAL_PROPERTY_LISTINGS);
+  return updatedListings;
 }
 
 export function exportToCSV(listings: PropertyListing[]): void {
-  const headers = ['No.', 'Property', 'Location', 'Tenure', 'PM', 'Available Units', 'Status', 'Date', 'Renew Status'];
+  const headers = ['No.', 'Property', 'Project Category', 'Location', 'Tenure', 'PM', 'Available Units', 'Status', 'Date', 'Renew Status'];
   const rows = listings.map((l) => [
     l.id,
     `"${(l.property || '').replace(/"/g, '""')}"`,
+    `"${(l.projectCategory || 'Project Marketing (PM)').replace(/"/g, '""')}"`,
     `"${(l.location || '').replace(/"/g, '""')}"`,
     `"${(l.tenure || '').replace(/"/g, '""')}"`,
     `"${(l.pm || '').replace(/"/g, '""')}"`,
@@ -86,24 +91,55 @@ export function parseCSVToListings(csvText: string, startingId: number): Propert
     }
     cells.push(currentCell.trim());
 
-    if (cells.length >= 7) {
-      results.push({
+    if (cells.length >= 8) {
+      let prop = cells[1] || `Property ${currentId}`;
+      let cat: any = 'Project Marketing (PM)';
+      let loc = '-';
+      let ten = '-';
+      let pmVal = '-';
+      let units = '-';
+      let stat: any = 'Active';
+      let pDate = '';
+      let rStat: any = 'Not Renewed';
+
+      // 10-column format with Category
+      if (cells.length >= 10) {
+        cat = cells[2] || 'Project Marketing (PM)';
+        loc = cells[3] || '-';
+        ten = cells[4] || '-';
+        pmVal = cells[5] || '-';
+        units = cells[6] || '-';
+        stat = cells[7] === 'Expired' ? 'Expired' : 'Active';
+        pDate = cells[8] || `${new Date().getDate()}.${new Date().getMonth() + 1}`;
+        rStat = cells[9]?.includes('Want') ? 'Want to be renew' : cells[9] === 'Renewed' ? 'Renewed' : 'Not Renewed';
+      } else {
+        // Legacy 9-column format
+        loc = cells[2] || '-';
+        ten = cells[3] || '-';
+        pmVal = cells[4] || '-';
+        units = cells[5] || '-';
+        stat = cells[6] === 'Expired' ? 'Expired' : 'Active';
+        pDate = cells[7] || `${new Date().getDate()}.${new Date().getMonth() + 1}`;
+        rStat = cells[8]?.includes('Want') ? 'Want to be renew' : cells[8] === 'Renewed' ? 'Renewed' : 'Not Renewed';
+      }
+
+      const initialItem: PropertyListing = {
         id: currentId++,
-        property: cells[1] || `Property ${currentId}`,
-        location: cells[2] || '-',
-        tenure: cells[3] || '-',
-        pm: cells[4] || '-',
-        availableUnits: cells[5] || '-',
-        status: (cells[6] === 'Expired' ? 'Expired' : 'Active') as any,
-        date: cells[7] || `${new Date().getDate()}.${new Date().getMonth() + 1}`,
-        renewStatus: (cells[8]?.includes('Want')
-          ? 'Want to be renew'
-          : cells[8] === 'Renewed'
-          ? 'Renewed'
-          : 'Not Renewed') as any,
-      });
+        property: prop,
+        projectCategory: cat,
+        location: loc,
+        tenure: ten,
+        pm: pmVal,
+        availableUnits: units,
+        status: stat,
+        date: pDate,
+        renewStatus: rStat,
+      };
+
+      results.push(initialItem);
     }
   }
 
-  return results;
+  const { updatedListings } = autoExpireListings(results);
+  return updatedListings;
 }

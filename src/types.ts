@@ -2,9 +2,27 @@ export type TenureType = 'Freehold' | 'Leasehold' | 'Freehold Malay Reserved' | 
 export type ListingStatus = 'Active' | 'Expired' | 'Pending' | 'Sold Out';
 export type RenewStatus = 'Renewed' | 'Not Renewed' | 'Want to be renew' | 'In Progress' | '-';
 
+export type ProjectCategory =
+  | 'Project Marketing (PM)'
+  | 'Rental'
+  | 'Subsale CoA (SSCOA)'
+  | 'Subsale Direct Listing (SSDL)'
+  | 'Million Dollar Property (MD)'
+  | 'Auction';
+
+export const PROJECT_CATEGORIES: ProjectCategory[] = [
+  'Project Marketing (PM)',
+  'Rental',
+  'Subsale CoA (SSCOA)',
+  'Subsale Direct Listing (SSDL)',
+  'Million Dollar Property (MD)',
+  'Auction',
+];
+
 export interface PropertyListing {
   id: number;
   property: string;
+  projectCategory?: ProjectCategory;
   location: string;
   tenure: TenureType;
   pm: string;
@@ -14,10 +32,27 @@ export interface PropertyListing {
   renewStatus: RenewStatus;
   notes?: string;
   updatedAt?: string;
+  // Audit tracking: user name and timestamp
+  updatedByUserId?: string;
+  updatedByName?: string;
+  updatedByEmail?: string;
+  lastUpdatedAt?: string;
+}
+
+export interface ListingAuditEntry {
+  id: number;
+  listingId: number;
+  action: string;
+  changedFields?: string;
+  userName: string;
+  userEmail?: string;
+  userUid?: string;
+  timestamp: string;
 }
 
 export interface ExtractionResult {
   property: string;
+  projectCategory?: ProjectCategory;
   location: string;
   tenure: string;
   pm: string;
@@ -66,6 +101,8 @@ export interface PMAlertDraft {
 
 export interface FilterState {
   searchQuery: string;
+  projectCategory?: string;
+  category?: string;
   status: string;
   renewStatus: string;
   tenure: string;

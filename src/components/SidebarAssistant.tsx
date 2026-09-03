@@ -343,7 +343,7 @@ export const SidebarAssistant: React.FC<SidebarAssistantProps> = ({
             <textarea
               rows={4}
               value={quickPasteText}
-              onChange={(e) => setQuickPasteText(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuickPasteText(e.target.value)}
               placeholder="e.g. 'Hey team, we just got a new leasehold project in Shah Alam called Service Apartment Linkar 52. Haneah will manage it. 256/495 units available...'"
               className="w-full text-[11px] bg-slate-900/90 text-white border border-slate-700 rounded p-2 outline-none focus:border-indigo-400 placeholder-slate-500"
             />

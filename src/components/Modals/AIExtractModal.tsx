@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ExtractionResult, PropertyListing } from '../../types';
+import { ExtractionResult, PropertyListing, PROJECT_CATEGORIES } from '../../types';
 import { extractListingsWithAI } from '../../services/api';
+import { isDatePassed } from '../../utils/dateUtils';
 import { Sparkles, X, Plus, AlertCircle, Wand2, Check, RefreshCw } from 'lucide-react';
 
 interface AIExtractModalProps {
@@ -46,7 +47,15 @@ export const AIExtractModal: React.FC<AIExtractModalProps> = ({
     try {
       const response = await extractListingsWithAI(inputText);
       if (response.success && response.data) {
-        setResults(response.data);
+        const validated = response.data.map((item) => {
+          if (item.date && item.date.trim() !== '-' && item.date.trim() !== '') {
+            const isPassed = isDatePassed(item.date);
+            const status: 'Active' | 'Expired' = isPassed ? 'Expired' : 'Active';
+            return { ...item, status };
+          }
+          return item;
+        });
+        setResults(validated);
       } else {
         setError('Could not extract any listings from the input text.');
       }
@@ -60,7 +69,11 @@ export const AIExtractModal: React.FC<AIExtractModalProps> = ({
   const handleUpdateResult = (index: number, field: keyof ExtractionResult, value: string) => {
     setResults((prev) => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
+      const item = { ...updated[index], [field]: value };
+      if (field === 'date' && value && value.trim() !== '-' && value.trim() !== '') {
+        item.status = isDatePassed(value) ? 'Expired' : 'Active';
+      }
+      updated[index] = item;
       return updated;
     });
   };
@@ -187,6 +200,7 @@ export const AIExtractModal: React.FC<AIExtractModalProps> = ({
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold text-slate-500">
                       <th className="px-3 py-2">Property Name</th>
+                      <th className="px-3 py-2">Category</th>
                       <th className="px-3 py-2">Location</th>
                       <th className="px-3 py-2">Tenure</th>
                       <th className="px-3 py-2">PM</th>
@@ -207,6 +221,19 @@ export const AIExtractModal: React.FC<AIExtractModalProps> = ({
                             onChange={(e) => handleUpdateResult(idx, 'property', e.target.value)}
                             className="border border-slate-300 rounded px-2 py-1 w-full text-xs font-semibold"
                           />
+                        </td>
+                        <td className="p-2">
+                          <select
+                            value={row.projectCategory || 'Project Marketing (PM)'}
+                            onChange={(e) => handleUpdateResult(idx, 'projectCategory', e.target.value as any)}
+                            className="border border-slate-300 rounded px-1.5 py-1 text-xs bg-white font-medium text-indigo-700"
+                          >
+                            {PROJECT_CATEGORIES.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="p-2">
                           <input

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { PropertyListing, FilterState } from '../types';
+import { PropertyListing, FilterState, ProjectCategory, PROJECT_CATEGORIES } from '../types';
+import { getDateStatusInfo, isDatePassed } from '../utils/dateUtils';
 import {
   Search,
   ChevronDown,
@@ -11,7 +12,29 @@ import {
   Sparkles,
   ArrowUpDown,
   Filter,
+  History,
+  User,
+  Tag,
 } from 'lucide-react';
+
+export const getCategoryBadgeStyle = (category?: string) => {
+  switch (category) {
+    case 'Project Marketing (PM)':
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'Rental':
+      return 'bg-teal-50 text-teal-700 border-teal-200';
+    case 'Subsale CoA (SSCOA)':
+      return 'bg-amber-50 text-amber-800 border-amber-200';
+    case 'Subsale Direct Listing (SSDL)':
+      return 'bg-sky-50 text-sky-700 border-sky-200';
+    case 'Million Dollar Property (MD)':
+      return 'bg-purple-50 text-purple-700 border-purple-200';
+    case 'Auction':
+      return 'bg-rose-50 text-rose-700 border-rose-200';
+    default:
+      return 'bg-slate-50 text-slate-700 border-slate-200';
+  }
+};
 
 interface MasterPropertyGridProps {
   listings: PropertyListing[];
@@ -25,6 +48,7 @@ interface MasterPropertyGridProps {
   onDraftPMAlert: (listing: PropertyListing) => void;
   onBatchUpdate: (ids: number[], updates: Partial<PropertyListing>) => void;
   onBatchDelete: (ids: number[]) => void;
+  onOpenAuditLog?: (listingId: number, propertyName: string) => void;
 }
 
 export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
@@ -39,6 +63,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
   onDraftPMAlert,
   onBatchUpdate,
   onBatchDelete,
+  onOpenAuditLog,
 }) => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [editingCell, setEditingCell] = useState<{ id: number; field: keyof PropertyListing } | null>(null);
@@ -64,10 +89,17 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
         if (filters.searchQuery) {
           const q = filters.searchQuery.toLowerCase();
           const matchProp = (item.property || '').toLowerCase().includes(q);
+          const matchCategory = (item.projectCategory || '').toLowerCase().includes(q);
           const matchLoc = (item.location || '').toLowerCase().includes(q);
           const matchPM = (item.pm || '').toLowerCase().includes(q);
           const matchTenure = (item.tenure || '').toLowerCase().includes(q);
-          if (!matchProp && !matchLoc && !matchPM && !matchTenure) return false;
+          if (!matchProp && !matchCategory && !matchLoc && !matchPM && !matchTenure) return false;
+        }
+
+        // Project Category filter
+        const selectedCat = filters.projectCategory || filters.category;
+        if (selectedCat && selectedCat !== 'All') {
+          if (item.projectCategory !== selectedCat) return false;
         }
 
         // Status filter
@@ -172,6 +204,23 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
             />
           </div>
 
+          {/* Quick Project Category Dropdown */}
+          <select
+            value={filters.projectCategory || filters.category || 'All'}
+            onChange={(e) =>
+              onFilterChange({ projectCategory: e.target.value, category: e.target.value })
+            }
+            className="text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer"
+            title="Filter by Project Category"
+          >
+            <option value="All">All Categories</option>
+            {PROJECT_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+
           {/* Quick PM Dropdown */}
           <select
             value={filters.pm}
@@ -217,6 +266,8 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
             {listings.length} rows
           </span>
           {(filters.searchQuery ||
+            (filters.projectCategory && filters.projectCategory !== 'All') ||
+            (filters.category && filters.category !== 'All') ||
             filters.pm !== 'All' ||
             filters.tenure !== 'All' ||
             filters.status !== 'All' ||
@@ -225,6 +276,8 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
               onClick={() =>
                 onFilterChange({
                   searchQuery: '',
+                  projectCategory: 'All',
+                  category: 'All',
                   pm: 'All',
                   tenure: 'All',
                   status: 'All',
@@ -332,6 +385,12 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                   Property
                 </th>
                 <th
+                  onClick={() => handleSort('projectCategory')}
+                  className="border border-slate-400/50 px-3 py-2 min-w-[155px] cursor-pointer hover:bg-[#383e66]"
+                >
+                  Project Category
+                </th>
+                <th
                   onClick={() => handleSort('location')}
                   className="border border-slate-400/50 px-3 py-2 min-w-[200px] cursor-pointer hover:bg-[#383e66]"
                 >
@@ -373,6 +432,13 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                 >
                   Renew Status
                 </th>
+                <th
+                  onClick={() => handleSort('lastUpdatedAt')}
+                  className="border border-slate-400/50 px-2.5 py-2 min-w-[130px] text-left cursor-pointer hover:bg-[#383e66]"
+                  title="Who updated the listing and when"
+                >
+                  Updated By & When
+                </th>
                 <th className="border border-slate-400/50 px-2 py-2 w-14 text-center">
                   Edit
                 </th>
@@ -383,7 +449,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
             <tbody className="divide-y divide-slate-300 text-slate-900">
               {filteredListings.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="border border-slate-300 px-4 py-8 text-center text-slate-500">
+                  <td colSpan={13} className="border border-slate-300 px-4 py-8 text-center text-slate-500">
                     No listings match the current filters.
                   </td>
                 </tr>
@@ -392,8 +458,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                   const isSelected = selectedIds.includes(item.id);
                   // In the spreadsheet: Renewed is pale green (#e2efda), Want to be renew is vibrant orange (#fed7aa)
                   const isRenewed = item.renewStatus === 'Renewed';
-                  const isWantToRenew =
-                    item.renewStatus === 'Want to be renew' || item.renewStatus === 'Want to be renewed';
+                  const isWantToRenew = item.renewStatus === 'Want to be renew';
                   const rowBgClass = isSelected
                     ? 'bg-indigo-100/70'
                     : isWantToRenew
@@ -440,6 +505,50 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                           />
                         ) : (
                           item.property
+                        )}
+                      </td>
+
+                      {/* Project Category */}
+                      <td
+                        className="border border-slate-300 px-2.5 py-1.5"
+                        title="Double-click to change category"
+                      >
+                        {editingCell?.id === item.id && editingCell?.field === 'projectCategory' ? (
+                          <select
+                            autoFocus
+                            value={editValue}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditValue(val);
+                              if (onUpdateField) {
+                                onUpdateField(item.id, 'projectCategory', val);
+                              }
+                              setEditingCell(null);
+                            }}
+                            onBlur={() => setEditingCell(null)}
+                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white font-medium text-slate-800"
+                          >
+                            {PROJECT_CATEGORIES.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div
+                            onDoubleClick={() =>
+                              startEdit(item.id, 'projectCategory', item.projectCategory || 'Project Marketing (PM)')
+                            }
+                            className="flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium border ${getCategoryBadgeStyle(
+                                item.projectCategory
+                              )}`}
+                            >
+                              {item.projectCategory || 'Project Marketing (PM)'}
+                            </span>
+                          </div>
                         )}
                       </td>
 
@@ -536,36 +645,50 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
 
                       {/* Status (Dropdown Pill exactly matching the image) */}
                       <td className="border border-slate-300 px-2 py-1.5 text-center">
-                        <div className="inline-flex items-center justify-center relative">
-                          <select
-                            value={item.status}
-                            onChange={(e) => {
-                              if (onUpdateField) {
-                                onUpdateField(item.id, 'status', e.target.value);
-                              } else if (onToggleStatus) {
-                                onToggleStatus(item.id);
-                              }
-                            }}
-                            className={`appearance-none cursor-pointer pl-3 pr-6 py-0.5 rounded-full text-xs font-semibold transition-all border outline-none shadow-2xs ${
-                              item.status === 'Active'
-                                ? 'bg-[#3cb371] hover:bg-[#34a064] text-white border-[#2e9c5e]'
-                                : 'bg-[#f87171] hover:bg-[#ef5350] text-slate-900 border-[#f28b82]'
-                            }`}
-                            title="Click to change status"
-                          >
-                            <option value="Active" className="bg-white text-slate-900">
-                              Active
-                            </option>
-                            <option value="Expired" className="bg-white text-slate-900">
-                              Expired
-                            </option>
-                          </select>
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 absolute right-2 pointer-events-none ${
-                              item.status === 'Active' ? 'text-white' : 'text-slate-800'
-                            }`}
-                          />
-                        </div>
+                        {(() => {
+                          const dateStatus = getDateStatusInfo(item.date);
+                          return (
+                            <div className="inline-flex items-center justify-center relative">
+                              <select
+                                value={item.status}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === 'Active' && dateStatus.isPassed) {
+                                    alert(`The date for this listing (${item.date}) has passed. To make it Active, update its date to a future date.`);
+                                    return;
+                                  }
+                                  if (onUpdateField) {
+                                    onUpdateField(item.id, 'status', val);
+                                  } else if (onToggleStatus) {
+                                    onToggleStatus(item.id);
+                                  }
+                                }}
+                                className={`appearance-none cursor-pointer pl-3 pr-6 py-0.5 rounded-full text-xs font-semibold transition-all border outline-none shadow-2xs ${
+                                  item.status === 'Active'
+                                    ? 'bg-[#3cb371] hover:bg-[#34a064] text-white border-[#2e9c5e]'
+                                    : 'bg-[#f87171] hover:bg-[#ef5350] text-slate-900 border-[#f28b82]'
+                                }`}
+                                title={
+                                  dateStatus.isPassed
+                                    ? `Automatically Expired (Date ${item.date} has passed)`
+                                    : `Automatically Active (Date ${item.date} has not passed yet)`
+                                }
+                              >
+                                <option value="Active" className="bg-white text-slate-900">
+                                  Active
+                                </option>
+                                <option value="Expired" className="bg-white text-slate-900">
+                                  Expired
+                                </option>
+                              </select>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 absolute right-2 pointer-events-none ${
+                                  item.status === 'Active' ? 'text-white' : 'text-slate-800'
+                                }`}
+                              />
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Date */}
@@ -582,10 +705,35 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                             onChange={(e) => setEditValue(e.target.value)}
                             onBlur={saveEdit}
                             onKeyDown={handleKeyDown}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white text-center"
+                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white text-center font-mono"
                           />
                         ) : (
-                          item.date
+                          (() => {
+                            const dateStatus = getDateStatusInfo(item.date);
+                            const hasDate = item.date && item.date.trim() !== '-' && item.date.trim() !== '';
+                            return (
+                              <div
+                                className="inline-flex items-center justify-center gap-1 cursor-pointer"
+                                title={
+                                  dateStatus.isPassed
+                                    ? `Date has passed (${dateStatus.badgeLabel}) • Status is Expired (Double-click to edit)`
+                                    : `Active milestone (${dateStatus.badgeLabel}) • Status is Active (Double-click to edit)`
+                                }
+                              >
+                                <span className={dateStatus.isPassed ? 'text-rose-700 font-medium' : 'text-slate-800'}>
+                                  {item.date}
+                                </span>
+                                {hasDate && (
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                      dateStatus.isPassed ? 'bg-rose-500' : 'bg-emerald-500'
+                                    }`}
+                                    title={dateStatus.badgeLabel}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })()
                         )}
                       </td>
 
@@ -629,6 +777,44 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                                 : 'text-slate-600'
                             }`}
                           />
+                        </div>
+                      </td>
+
+                      {/* Updated By & When with audit log trigger */}
+                      <td className="border border-slate-300 px-2.5 py-1 text-left">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[11px] font-semibold text-slate-800 truncate flex items-center gap-1">
+                              <User className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                              {item.updatedByName || 'Team Member'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 truncate">
+                              {item.lastUpdatedAt
+                                ? (() => {
+                                    try {
+                                      const d = new Date(item.lastUpdatedAt);
+                                      return d.toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      });
+                                    } catch {
+                                      return item.lastUpdatedAt;
+                                    }
+                                  })()
+                                : 'Initial'}
+                            </span>
+                          </div>
+                          {onOpenAuditLog && (
+                            <button
+                              onClick={() => onOpenAuditLog(item.id, item.property)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-slate-100 transition shrink-0"
+                              title="View change history for this listing"
+                            >
+                              <History className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </td>
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PropertyListing, FilterState, ExtractionResult, RenewStatus } from './types';
 import { loadListings, saveListings } from './utils/storage';
+import { autoExpireListings, evaluateListingExpiry, isDatePassed } from './utils/dateUtils';
 import { Header } from './components/Header';
 import { KPIMetrics } from './components/KPIMetrics';
 import { MasterPropertyGrid } from './components/MasterPropertyGrid';
@@ -9,11 +10,23 @@ import { AIExtractModal } from './components/Modals/AIExtractModal';
 import { PMAlertModal } from './components/Modals/PMAlertModal';
 import { StandardizeModal } from './components/Modals/StandardizeModal';
 import { ListingFormModal } from './components/Modals/ListingFormModal';
+import { AuditTrailModal } from './components/Modals/AuditTrailModal';
+import { useAuth } from './context/AuthContext';
+import {
+  fetchListingsFromCloudSql,
+  createListingInCloudSql,
+  updateListingInCloudSql,
+  deleteListingFromCloudSql,
+} from './services/api';
 
 export default function App() {
+  const { userName, currentUser, token } = useAuth();
   const [listings, setListings] = useState<PropertyListing[]>(() => loadListings());
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
+    projectCategory: 'All',
+    category: 'All',
     status: 'All',
     renewStatus: 'All',
     tenure: 'All',
@@ -37,6 +50,52 @@ export default function App() {
   const [alertListing, setAlertListing] = useState<PropertyListing | null>(null);
 
   const [isStandardizeOpen, setIsStandardizeOpen] = useState(false);
+
+  // Audit trail modal state
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [auditListingTarget, setAuditListingTarget] = useState<{ id?: number; property?: string }>({});
+
+  // Initial load from Cloud SQL
+  useEffect(() => {
+    fetchListingsFromCloudSql()
+      .then((dbListings) => {
+        if (dbListings && dbListings.length > 0) {
+          const { updatedListings } = autoExpireListings(dbListings);
+          setListings(updatedListings);
+          saveListings(updatedListings);
+        } else {
+          // If database is empty, seed initial local listings to Cloud SQL
+          const localListings = loadListings();
+          localListings.forEach((l) => {
+            const { id, ...data } = l;
+            createListingInCloudSql(data, token, userName, currentUser?.email || undefined).catch(() => {});
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load from Cloud SQL, using local cache:', err);
+      })
+      .finally(() => {
+        setIsDbLoaded(true);
+      });
+  }, [token, userName, currentUser?.email]);
+
+  // Periodic automatic date check: ensures status is synchronized with listing date (Active if not passed, Expired if passed)
+  useEffect(() => {
+    const checkDateSync = () => {
+      setListings((prev) => {
+        const { updatedListings, changedCount } = autoExpireListings(prev);
+        if (changedCount > 0) {
+          return updatedListings;
+        }
+        return prev;
+      });
+    };
+
+    checkDateSync();
+    const interval = setInterval(checkDateSync, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Sync to local storage on changes
   useEffect(() => {
@@ -64,76 +123,181 @@ export default function App() {
     setActiveFilterTab('custom');
   };
 
-  // Add or Edit save
-  const handleSaveListing = (listing: PropertyListing) => {
+  // Add or Edit save with automatic date expiration enforcement and Cloud SQL persistence
+  const handleSaveListing = async (listing: PropertyListing) => {
+    const checked = evaluateListingExpiry({
+      ...listing,
+      updatedByName: userName || 'Team Member',
+      updatedByEmail: currentUser?.email || undefined,
+      lastUpdatedAt: new Date().toISOString(),
+    });
+
+    // Optimistic UI update
     setListings((prev) => {
-      const existsIndex = prev.findIndex((l) => l.id === listing.id);
+      const existsIndex = prev.findIndex((l) => l.id === checked.id);
       if (existsIndex >= 0) {
         const updated = [...prev];
-        updated[existsIndex] = listing;
+        updated[existsIndex] = checked;
         return updated;
       }
-      return [...prev, listing];
+      return [...prev, checked];
     });
-  };
 
-  const handleDeleteListing = (id: number) => {
-    if (window.confirm(`Are you sure you want to delete listing #${id}?`)) {
-      setListings((prev) => prev.filter((l) => l.id !== id));
+    // Cloud SQL DB update with user attribution
+    try {
+      const exists = listings.some((l) => l.id === checked.id);
+      if (exists) {
+        await updateListingInCloudSql(checked.id, checked, token, userName, currentUser?.email || undefined);
+      } else {
+        const { id, ...createData } = checked;
+        const saved = await createListingInCloudSql(createData, token, userName, currentUser?.email || undefined);
+        // Replace with DB-generated ID if created
+        if (saved && saved.id) {
+          setListings((prev) => prev.map((l) => (l.id === checked.id ? saved : l)));
+        }
+      }
+    } catch (err) {
+      console.warn('Cloud SQL listing save warning:', err);
     }
   };
 
-  const handleToggleRenewStatus = (id: number) => {
-    setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          let nextRenew: RenewStatus = 'Renewed';
-          if (l.renewStatus === 'Renewed') {
-            nextRenew = 'Want to be renew';
-          } else if (l.renewStatus === 'Want to be renew') {
-            nextRenew = 'Not Renewed';
-          } else {
-            nextRenew = 'Renewed';
-          }
-
-          return {
-            ...l,
-            renewStatus: nextRenew,
-            status: nextRenew === 'Renewed' ? 'Active' : l.status,
-          };
-        }
-        return l;
-      })
-    );
+  const handleDeleteListing = async (id: number) => {
+    if (window.confirm(`Are you sure you want to delete listing #${id}?`)) {
+      setListings((prev) => prev.filter((l) => l.id !== id));
+      try {
+        await deleteListingFromCloudSql(id, token, userName);
+      } catch (err) {
+        console.warn('Cloud SQL delete warning:', err);
+      }
+    }
   };
 
-  const handleToggleStatus = (id: number) => {
+  const handleToggleRenewStatus = async (id: number) => {
+    const current = listings.find((l) => l.id === id);
+    if (!current) return;
+
+    let nextRenew: RenewStatus = 'Renewed';
+    if (current.renewStatus === 'Renewed') {
+      nextRenew = 'Want to be renew';
+    } else if (current.renewStatus === 'Want to be renew') {
+      nextRenew = 'Not Renewed';
+    } else {
+      nextRenew = 'Renewed';
+    }
+
+    const datePassed = isDatePassed(current.date);
+    const nextStatus = datePassed ? 'Expired' : nextRenew === 'Renewed' ? 'Active' : current.status;
+    const nowIso = new Date().toISOString();
+
     setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const nextStatus = l.status === 'Active' ? 'Expired' : 'Active';
-          return {
-            ...l,
-            status: nextStatus,
-          };
-        }
-        return l;
-      })
+      prev.map((l) =>
+        l.id === id
+          ? {
+              ...l,
+              renewStatus: nextRenew,
+              status: nextStatus,
+              updatedByName: userName || 'Team Member',
+              updatedByEmail: currentUser?.email || undefined,
+              lastUpdatedAt: nowIso,
+            }
+          : l
+      )
     );
+
+    try {
+      await updateListingInCloudSql(
+        id,
+        {
+          renewStatus: nextRenew,
+          status: nextStatus,
+          updatedByName: userName || 'Team Member',
+          updatedByEmail: currentUser?.email || undefined,
+          lastUpdatedAt: nowIso,
+        },
+        token,
+        userName,
+        currentUser?.email || undefined
+      );
+    } catch (err) {
+      console.warn('Cloud SQL update renewal warning:', err);
+    }
   };
 
-  const handleUpdateField = (id: number, field: keyof PropertyListing, value: string) => {
+  const handleToggleStatus = async (id: number) => {
+    const current = listings.find((l) => l.id === id);
+    if (!current) return;
+    const nextStatus = current.status === 'Active' ? 'Expired' : 'Active';
+    const nowIso = new Date().toISOString();
+
     setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          return {
-            ...l,
-            [field]: value,
-          };
-        }
-        return l;
-      })
+      prev.map((l) =>
+        l.id === id
+          ? {
+              ...l,
+              status: nextStatus,
+              updatedByName: userName || 'Team Member',
+              updatedByEmail: currentUser?.email || undefined,
+              lastUpdatedAt: nowIso,
+            }
+          : l
+      )
     );
+
+    try {
+      await updateListingInCloudSql(
+        id,
+        {
+          status: nextStatus,
+          updatedByName: userName || 'Team Member',
+          updatedByEmail: currentUser?.email || undefined,
+          lastUpdatedAt: nowIso,
+        },
+        token,
+        userName,
+        currentUser?.email || undefined
+      );
+    } catch (err) {
+      console.warn('Cloud SQL toggle status warning:', err);
+    }
+  };
+
+  const handleUpdateField = async (id: number, field: keyof PropertyListing, value: string) => {
+    const current = listings.find((l) => l.id === id);
+    if (!current) return;
+
+    const updated: PropertyListing = {
+      ...current,
+      [field]: value,
+      updatedByName: userName || 'Team Member',
+      updatedByEmail: currentUser?.email || undefined,
+      lastUpdatedAt: new Date().toISOString(),
+    };
+
+    if (field === 'date') {
+      if (value && value.trim() !== '-' && value.trim() !== '' && value.trim() !== 'N/A') {
+        updated.status = isDatePassed(value) ? 'Expired' : 'Active';
+      }
+    }
+
+    setListings((prev) => prev.map((l) => (l.id === id ? updated : l)));
+
+    try {
+      await updateListingInCloudSql(
+        id,
+        {
+          [field]: value,
+          status: updated.status,
+          updatedByName: userName || 'Team Member',
+          updatedByEmail: currentUser?.email || undefined,
+          lastUpdatedAt: updated.lastUpdatedAt,
+        },
+        token,
+        userName,
+        currentUser?.email || undefined
+      );
+    } catch (err) {
+      console.warn('Cloud SQL update field warning:', err);
+    }
   };
 
   const handleDraftPMAlert = (listing: PropertyListing) => {
@@ -143,27 +307,37 @@ export default function App() {
 
   const handleMarkRenewedFromAlert = (listingId: number) => {
     setListings((prev) =>
-      prev.map((l) =>
-        l.id === listingId ? { ...l, renewStatus: 'Renewed', status: 'Active' } : l
-      )
+      prev.map((l) => {
+        if (l.id === listingId) {
+          const datePassed = isDatePassed(l.date);
+          return {
+            ...l,
+            renewStatus: 'Renewed',
+            status: datePassed ? 'Expired' : 'Active',
+          };
+        }
+        return l;
+      })
     );
   };
 
   // Batch operations
   const handleBatchUpdate = (ids: number[], updates: Partial<PropertyListing>) => {
-    setListings((prev) =>
-      prev.map((l) => (ids.includes(l.id) ? { ...l, ...updates } : l))
-    );
+    setListings((prev) => {
+      const mapped = prev.map((l) => (ids.includes(l.id) ? { ...l, ...updates } : l));
+      const { updatedListings } = autoExpireListings(mapped);
+      return updatedListings;
+    });
   };
 
   const handleBatchDelete = (ids: number[]) => {
     setListings((prev) => prev.filter((l) => !ids.includes(l.id)));
   };
 
-  // Add extracted listings from AI modal
+  // Add extracted listings from AI modal with auto-expiry check
   const handleAddExtractedListings = (extracted: ExtractionResult[]) => {
     let nextId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
-    const newListings: PropertyListing[] = extracted.map((e) => ({
+    const rawListings: PropertyListing[] = extracted.map((e) => ({
       id: nextId++,
       property: e.property,
       location: e.location,
@@ -175,7 +349,8 @@ export default function App() {
       renewStatus: e.renewStatus,
       notes: e.confidenceNotes,
     }));
-    setListings((prev) => [...prev, ...newListings]);
+    const { updatedListings } = autoExpireListings(rawListings);
+    setListings((prev) => [...prev, ...updatedListings]);
   };
 
   // Apply Standardization changes
@@ -217,6 +392,10 @@ export default function App() {
           setIsExtractOpen(true);
         }}
         onOpenStandardizeModal={() => setIsStandardizeOpen(true)}
+        onOpenAuditModal={() => {
+          setAuditListingTarget({});
+          setIsAuditModalOpen(true);
+        }}
         onListingsUpdated={(newListings) => setListings(newListings)}
       />
 
@@ -247,6 +426,10 @@ export default function App() {
           onDraftPMAlert={handleDraftPMAlert}
           onBatchUpdate={handleBatchUpdate}
           onBatchDelete={handleBatchDelete}
+          onOpenAuditLog={(id, property) => {
+            setAuditListingTarget({ id, property });
+            setIsAuditModalOpen(true);
+          }}
         />
 
         {/* AI Studio Assistant Sidebar (Collapsible) */}
@@ -302,6 +485,14 @@ export default function App() {
         listings={listings}
         onClose={() => setIsStandardizeOpen(false)}
         onApplyStandardization={handleApplyStandardization}
+      />
+
+      {/* 5. Cloud SQL Audit Trail History Modal */}
+      <AuditTrailModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        listingId={auditListingTarget.id}
+        listingProperty={auditListingTarget.property}
       />
     </div>
   );

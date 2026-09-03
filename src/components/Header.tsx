@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Plus,
   Sparkles,
@@ -10,9 +10,16 @@ import {
   PanelRightClose,
   PanelRightOpen,
   BarChart2,
+  History,
+  LogIn,
+  LogOut,
+  User as UserIcon,
+  Database,
+  CheckCircle2,
 } from 'lucide-react';
 import { PropertyListing } from '../types';
 import { exportToCSV, parseCSVToListings, resetListings } from '../utils/storage';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   listings: PropertyListing[];
@@ -23,6 +30,7 @@ interface HeaderProps {
   onOpenAddModal: () => void;
   onOpenExtractModal: () => void;
   onOpenStandardizeModal: () => void;
+  onOpenAuditModal: () => void;
   onListingsUpdated: (newListings: PropertyListing[]) => void;
 }
 
@@ -35,9 +43,13 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddModal,
   onOpenExtractModal,
   onOpenStandardizeModal,
+  onOpenAuditModal,
   onListingsUpdated,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { currentUser, userName, signInWithGoogle, signOut, setCustomUserName } = useAuth();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(userName);
 
   const handleExportCSV = () => {
     exportToCSV(listings);
@@ -152,6 +164,105 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        <div className="h-5 w-[1px] bg-slate-200"></div>
+
+        {/* Audit Trail Button */}
+        <button
+          onClick={onOpenAuditModal}
+          className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded text-xs font-medium border border-slate-300 transition-colors cursor-pointer"
+          title="View who updated listings and timestamp audit history"
+        >
+          <History className="w-3.5 h-3.5 text-indigo-600" />
+          <span className="hidden md:inline">Audit Trail</span>
+        </button>
+
+        {/* Cloud SQL Connected Indicator */}
+        <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-200 rounded text-[11px] font-semibold text-emerald-800" title="Connected to managed Cloud SQL PostgreSQL database with live audit synchronization">
+          <Database className="w-3 h-3 text-emerald-600" />
+          <span>Cloud SQL</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        </div>
+
+        {/* User Attribution / Profile */}
+        <div className="flex items-center gap-1.5 pl-1 border-l border-slate-200">
+          {currentUser ? (
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={userName}
+                  className="w-5 h-5 rounded-full"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-semibold text-slate-800 leading-none truncate max-w-[90px]">
+                  {userName}
+                </span>
+                <span className="text-[9px] text-slate-400 leading-tight truncate max-w-[90px]">
+                  Logged in
+                </span>
+              </div>
+              <button
+                onClick={signOut}
+                className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-200 transition"
+                title="Sign out"
+              >
+                <LogOut className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              {isEditingName ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (tempName.trim()) {
+                      setCustomUserName(tempName.trim());
+                    }
+                    setIsEditingName(false);
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <input
+                    type="text"
+                    value={tempName}
+                    onChange={(e) => setTempName(e.target.value)}
+                    placeholder="Your Name"
+                    className="text-xs px-1.5 py-1 border border-indigo-400 rounded w-24 bg-white outline-none"
+                    autoFocus
+                    onBlur={() => {
+                      if (tempName.trim()) setCustomUserName(tempName.trim());
+                      setIsEditingName(false);
+                    }}
+                  />
+                </form>
+              ) : (
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="flex items-center gap-1 text-xs text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded border border-slate-200 transition cursor-pointer"
+                  title="Click to set your editor name for audit tracking"
+                >
+                  <UserIcon className="w-3 h-3 text-slate-500" />
+                  <span className="font-semibold text-xs max-w-[80px] truncate">{userName}</span>
+                </button>
+              )}
+              <button
+                onClick={signInWithGoogle}
+                className="flex items-center gap-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded font-medium shadow-2xs transition cursor-pointer"
+                title="Sign in with Google to record verified user identity"
+              >
+                <LogIn className="w-3 h-3" />
+                <span className="hidden sm:inline">Sign In</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="h-5 w-[1px] bg-slate-200"></div>
