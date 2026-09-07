@@ -21,7 +21,7 @@ import {
 
 export default function App() {
   const { userName, currentUser, token } = useAuth();
-  const [listings, setListings] = useState<PropertyListing[]>(() => loadListings());
+  const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
@@ -64,19 +64,12 @@ export default function App() {
           setListings(updatedListings);
           saveListings(updatedListings);
         } else {
-          // If database is empty, seed initial local listings to Cloud SQL
-          const localListings = loadListings();
-          setListings(localListings);
-          localListings.forEach((l) => {
-            const { id, ...data } = l;
-            createListingInCloudSql(data, token, userName, currentUser?.email || undefined).catch(() => {});
-          });
+          setListings([]);
         }
       })
       .catch((err) => {
-        console.warn('Could not load from Cloud SQL, using local cache:', err);
-        const localListings = loadListings();
-        setListings(localListings);
+        console.warn('Could not load from Cloud SQL, no local fallback will be used:', err);
+        setListings([]);
       })
       .finally(() => {
         setIsDbLoaded(true);
