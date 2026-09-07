@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import { AuthRole, SessionUser } from '../context/AuthContext';
 
 interface UserManagementModalProps {
@@ -12,6 +12,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<AuthRole>('user');
   const [error, setError] = useState('');
 
@@ -42,6 +43,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
     setUsername('');
     setDisplayName('');
     setPassword('');
+    setShowPassword(false);
     setRole('user');
     await loadUsers();
   };
@@ -65,7 +67,26 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
             <h3 className="text-sm font-semibold text-slate-800">Create account</h3>
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" required className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display name" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (8+ characters)" type="password" minLength={8} required className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+            <div className="relative">
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password (8+ characters)"
+                type={showPassword ? 'text' : 'password'}
+                minLength={8}
+                required
+                className="w-full rounded border border-slate-300 px-3 py-2 pr-10 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-indigo-600"
+                title={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <select value={role} onChange={(e) => setRole(e.target.value as AuthRole)} className="w-full rounded border border-slate-300 px-3 py-2 text-sm">
               <option value="user">User</option>
               <option value="admin">Admin</option>
