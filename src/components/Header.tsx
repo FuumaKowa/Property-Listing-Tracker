@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PropertyListing } from '../types';
 import { exportToCSV, parseCSVToListings, resetListings } from '../utils/storage';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   listings: PropertyListing[];
@@ -29,6 +30,7 @@ interface HeaderProps {
   onOpenAuditModal: () => void;
   onRefreshListings: () => Promise<void>;
   isRefreshing: boolean;
+  onOpenUserManagement: () => void;
   onListingsUpdated: (newListings: PropertyListing[]) => void;
 }
 
@@ -44,9 +46,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuditModal,
   onRefreshListings,
   isRefreshing,
+  onOpenUserManagement,
   onListingsUpdated,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user, logout } = useAuth();
 
   const handleExportCSV = () => {
     exportToCSV(listings);
@@ -180,6 +184,18 @@ export const Header: React.FC<HeaderProps> = ({
           <Database className="w-3 h-3 text-emerald-600" />
           <span>Cloud SQL</span>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        </div>
+
+        <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+          <span className="hidden xl:inline text-xs font-medium text-slate-600">{user?.displayName || user?.username}</span>
+          {user?.role === 'super_admin' && (
+            <button onClick={onOpenUserManagement} className="rounded px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-indigo-600" title="Manage users">
+              Users
+            </button>
+          )}
+          <button onClick={logout} className="rounded px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-rose-600" title="Sign out">
+            Sign out
+          </button>
         </div>
 
         <button

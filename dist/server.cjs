@@ -42,6 +42,8 @@ var import_pg = require("pg");
 // src/db/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  authSessions: () => authSessions,
+  authUsers: () => authUsers,
   listingAuditLogs: () => listingAuditLogs,
   listingAuditLogsRelations: () => listingAuditLogsRelations,
   listings: () => listings,
@@ -53,12 +55,27 @@ var import_pg_core = require("drizzle-orm/pg-core");
 var users = (0, import_pg_core.pgTable)("users", {
   id: (0, import_pg_core.serial)("id").primaryKey(),
   uid: (0, import_pg_core.text)("uid").notNull().unique(),
-  // Firebase Auth UID
   email: (0, import_pg_core.text)("email").notNull(),
   displayName: (0, import_pg_core.text)("display_name"),
   photoUrl: (0, import_pg_core.text)("photo_url"),
   createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
   lastLoginAt: (0, import_pg_core.timestamp)("last_login_at").defaultNow()
+});
+var authUsers = (0, import_pg_core.pgTable)("auth_users", {
+  id: (0, import_pg_core.serial)("id").primaryKey(),
+  username: (0, import_pg_core.text)("username").notNull().unique(),
+  passwordHash: (0, import_pg_core.text)("password_hash").notNull(),
+  role: (0, import_pg_core.text)("role").notNull().default("user"),
+  displayName: (0, import_pg_core.text)("display_name"),
+  createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
+  lastLoginAt: (0, import_pg_core.timestamp)("last_login_at").defaultNow()
+});
+var authSessions = (0, import_pg_core.pgTable)("auth_sessions", {
+  id: (0, import_pg_core.serial)("id").primaryKey(),
+  sessionTokenHash: (0, import_pg_core.text)("session_token_hash").notNull().unique(),
+  userId: (0, import_pg_core.integer)("user_id").references(() => authUsers.id, { onDelete: "cascade" }).notNull(),
+  expiresAt: (0, import_pg_core.timestamp)("expires_at").notNull(),
+  createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow()
 });
 var listings = (0, import_pg_core.pgTable)("listings", {
   id: (0, import_pg_core.serial)("id").primaryKey(),

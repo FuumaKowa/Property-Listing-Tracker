@@ -1,7 +1,10 @@
 import { getDb, getErrorMessage, json, listingColumns, PagesEnv } from '../_db';
+import { authError, AuthEnv, getSessionUser } from '../_auth';
 
-export const onRequestPatch = async ({ env, request, params }: { env: PagesEnv; request: Request; params: { id?: string } }) => {
+export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; request: Request; params: { id?: string } }) => {
   try {
+    const user = await getSessionUser(request, env);
+    if (!user) return authError();
     const id = Number(params.id);
     if (!Number.isInteger(id)) {
       return json({ success: false, error: 'Invalid listing ID.' }, 400);
@@ -53,8 +56,10 @@ export const onRequestPatch = async ({ env, request, params }: { env: PagesEnv; 
   }
 };
 
-export const onRequestDelete = async ({ env, params }: { env: PagesEnv; params: { id?: string } }) => {
+export const onRequestDelete = async ({ env, request, params }: { env: AuthEnv; request: Request; params: { id?: string } }) => {
   try {
+    const user = await getSessionUser(request, env);
+    if (!user) return authError();
     const id = Number(params.id);
     if (!Number.isInteger(id)) {
       return json({ success: false, error: 'Invalid listing ID.' }, 400);

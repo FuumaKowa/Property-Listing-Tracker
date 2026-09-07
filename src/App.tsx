@@ -11,6 +11,8 @@ import { PMAlertModal } from './components/Modals/PMAlertModal';
 import { StandardizeModal } from './components/Modals/StandardizeModal';
 import { ListingFormModal } from './components/Modals/ListingFormModal';
 import { AuditTrailModal } from './components/Modals/AuditTrailModal';
+import { UserManagementModal } from './components/UserManagementModal';
+import { useAuth } from './context/AuthContext';
 import {
   fetchListingsFromCloudSql,
   createListingInCloudSql,
@@ -19,6 +21,14 @@ import {
 } from './services/api';
 
 export default function App() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading sign in...</div>;
+  }
+  return user ? <Workspace /> : <LoginScreen />;
+}
+
+function Workspace() {
   const userName = 'Team Member';
   const token = null;
   const [listings, setListings] = useState<PropertyListing[]>([]);
@@ -55,6 +65,7 @@ export default function App() {
 
   // Audit trail modal state
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [auditListingTarget, setAuditListingTarget] = useState<{ id?: number; property?: string }>({});
 
   const refreshListings = useCallback(async () => {
@@ -408,6 +419,7 @@ export default function App() {
         }}
         onRefreshListings={refreshListings}
         isRefreshing={isRefreshing}
+        onOpenUserManagement={() => setIsUserManagementOpen(true)}
         onListingsUpdated={(newListings) => setListings(newListings)}
       />
 
@@ -532,6 +544,42 @@ export default function App() {
         listingId={auditListingTarget.id}
         listingProperty={auditListingTarget.property}
       />
+
+      <UserManagementModal isOpen={isUserManagementOpen} onClose={() => setIsUserManagementOpen(false)} />
+    </div>
+  );
+}
+
+function LoginScreen() {
+  const { login } = useAuth();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    const message = await login(username, password);
+    setError(message || '');
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="flex h-screen items-center justify-center bg-slate-100 px-6">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900">Property Listing Tracker</h1>
+        <p className="mt-2 text-sm text-slate-600">Sign in to access your workspace.</p>
+        <div className="mt-6 space-y-3">
+          <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" autoComplete="username" required className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+          <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" autoComplete="current-password" required className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+          <button disabled={submitting} className="w-full rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
+            {submitting ? 'Signing in...' : 'Sign in'}
+          </button>
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+        </div>
+      </form>
     </div>
   );
 }

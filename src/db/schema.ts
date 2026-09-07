@@ -1,15 +1,33 @@
 import { relations } from 'drizzle-orm';
 import { integer, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
-// Users table authenticated via Firebase Auth
+// Legacy user profile table retained for existing data.
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  uid: text('uid').notNull().unique(), // Firebase Auth UID
+  uid: text('uid').notNull().unique(),
   email: text('email').notNull(),
   displayName: text('display_name'),
   photoUrl: text('photo_url'),
   createdAt: timestamp('created_at').defaultNow(),
   lastLoginAt: timestamp('last_login_at').defaultNow(),
+});
+
+export const authUsers = pgTable('auth_users', {
+  id: serial('id').primaryKey(),
+  username: text('username').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role').notNull().default('user'),
+  displayName: text('display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  lastLoginAt: timestamp('last_login_at').defaultNow(),
+});
+
+export const authSessions = pgTable('auth_sessions', {
+  id: serial('id').primaryKey(),
+  sessionTokenHash: text('session_token_hash').notNull().unique(),
+  userId: integer('user_id').references(() => authUsers.id, { onDelete: 'cascade' }).notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Property listings table with audit tracking

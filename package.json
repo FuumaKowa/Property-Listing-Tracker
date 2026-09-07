@@ -10,9 +10,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
+    "db:generate": "drizzle-kit generate --config src/db/drizzle.config.ts",
+    "db:push": "drizzle-kit push --config src/db/drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config src/db/drizzle.config.ts",
     "db:seed": "tsx scripts/seed-neon.ts"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "@neondatabase/serverless": "^1.1.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",

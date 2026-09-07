@@ -1,7 +1,10 @@
 import { getDb, getErrorMessage, json, listingColumns, PagesEnv } from './_db';
+import { authError, AuthEnv, getSessionUser } from './_auth';
 
-export const onRequestGet = async ({ env }: { env: PagesEnv }) => {
+export const onRequestGet = async ({ env, request }: { env: AuthEnv; request: Request }) => {
   try {
+    const user = await getSessionUser(request, env);
+    if (!user) return authError();
     const db = getDb(env);
     const rows = await db.query(`SELECT ${listingColumns} FROM listings ORDER BY id`);
     return json({ success: true, data: rows });
@@ -10,8 +13,10 @@ export const onRequestGet = async ({ env }: { env: PagesEnv }) => {
   }
 };
 
-export const onRequestPost = async ({ env, request }: { env: PagesEnv; request: Request }) => {
+export const onRequestPost = async ({ env, request }: { env: AuthEnv; request: Request }) => {
   try {
+    const user = await getSessionUser(request, env);
+    if (!user) return authError();
     const body = await request.json() as Record<string, string | undefined>;
     if (!body.property || !body.location) {
       return json({ success: false, error: 'Property and location are required.' }, 400);
@@ -37,7 +42,7 @@ export const onRequestPost = async ({ env, request }: { env: PagesEnv; request: 
       body.date || '',
       body.renewStatus || 'Not Renewed',
       body.notes || null,
-      body.updatedByName || 'Team Member',
+      body.updatedByName || user.displayName || user.username,
       body.updatedByEmail || null,
     ]);
 

@@ -1,7 +1,10 @@
 import { getDb, getErrorMessage, json, PagesEnv } from './_db';
+import { authError, AuthEnv, getSessionUser } from './_auth';
 
-export const onRequestGet = async ({ env, request }: { env: PagesEnv; request: Request }) => {
+export const onRequestGet = async ({ env, request }: { env: AuthEnv; request: Request }) => {
   try {
+    const user = await getSessionUser(request, env);
+    if (!user) return authError();
     const listingId = new URL(request.url).searchParams.get('listingId');
     const db = getDb(env);
     const rows = listingId
