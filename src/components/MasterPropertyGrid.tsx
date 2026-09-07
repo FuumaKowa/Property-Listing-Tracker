@@ -49,6 +49,7 @@ interface MasterPropertyGridProps {
   onBatchUpdate: (ids: number[], updates: Partial<PropertyListing>) => void;
   onBatchDelete: (ids: number[]) => void;
   onOpenAuditLog?: (listingId: number, propertyName: string) => void;
+  sheetCategory?: string;
 }
 
 export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
@@ -64,10 +65,13 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
   onBatchUpdate,
   onBatchDelete,
   onOpenAuditLog,
+  sheetCategory = 'All',
 }) => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [editingCell, setEditingCell] = useState<{ id: number; field: keyof PropertyListing } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const usesNegotiatorLabel = sheetCategory === 'Rental' || sheetCategory === 'Subsale CoA (SSCOA)';
+  const peopleColumnLabel = usesNegotiatorLabel ? 'Negotiator / Agent / No Tel' : 'PM';
 
   // Unique list for PM and Location dropdowns
   const uniquePMs = useMemo(() => {
@@ -227,7 +231,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
             onChange={(e) => onFilterChange({ pm: e.target.value })}
             className="text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer"
           >
-            <option value="All">All PMs</option>
+            <option value="All">{usesNegotiatorLabel ? 'All Negotiators / Agents' : 'All PMs'}</option>
             {uniquePMs.map((pm) => (
               <option key={pm} value={pm}>
                 {pm}
@@ -406,7 +410,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                   onClick={() => handleSort('pm')}
                   className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]"
                 >
-                  PM
+                  {peopleColumnLabel}
                 </th>
                 <th
                   onClick={() => handleSort('availableUnits')}
@@ -454,7 +458,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredListings.map((item) => {
+                filteredListings.map((item, rowIndex) => {
                   const isSelected = selectedIds.includes(item.id);
                   // In the spreadsheet: Renewed is pale green (#e2efda), Want to be renew is vibrant orange (#fed7aa)
                   const isRenewed = item.renewStatus === 'Renewed';
@@ -484,7 +488,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
 
                       {/* No. */}
                       <td className="border border-slate-300 px-2.5 py-1.5 text-center font-normal text-slate-700">
-                        {item.id}
+                        {rowIndex + 1}
                       </td>
 
                       {/* Property */}

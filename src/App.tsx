@@ -396,6 +396,7 @@ function Workspace() {
   };
 
   const nextAvailableId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
+  const nextDisplayNumber = sheetListings.length + 1;
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-900 font-sans overflow-hidden">
@@ -482,6 +483,7 @@ function Workspace() {
             setAuditListingTarget({ id, property });
             setIsAuditModalOpen(true);
           }}
+          sheetCategory={activeSheet}
         />
 
         {/* AI Studio Assistant Sidebar (Collapsible) */}
@@ -513,6 +515,8 @@ function Workspace() {
         onClose={() => setIsAddEditOpen(false)}
         onSave={handleSaveListing}
         nextId={nextAvailableId}
+        displayNumber={nextDisplayNumber}
+        defaultProjectCategory={activeSheet === 'All' ? 'Project Marketing (PM)' : activeSheet}
       />
 
       {/* 2. AI Structured Extraction Modal (Text-to-Table) */}

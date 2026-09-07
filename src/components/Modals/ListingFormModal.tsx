@@ -10,6 +10,8 @@ interface ListingFormModalProps {
   onClose: () => void;
   onSave: (listing: PropertyListing) => void;
   nextId: number;
+  displayNumber?: number;
+  defaultProjectCategory?: ProjectCategory;
 }
 
 export const ListingFormModal: React.FC<ListingFormModalProps> = ({
@@ -18,12 +20,14 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
   onClose,
   onSave,
   nextId,
+  displayNumber = nextId,
+  defaultProjectCategory = 'Project Marketing (PM)',
 }) => {
   const { user } = useAuth();
   const userName = user?.displayName || user?.username || 'Team Member';
   const [formData, setFormData] = useState<Partial<PropertyListing>>({
     property: '',
-    projectCategory: 'Project Marketing (PM)',
+    projectCategory: defaultProjectCategory,
     location: '',
     tenure: 'Freehold',
     pm: '',
@@ -32,6 +36,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
     date: `${new Date().getDate()}.${new Date().getMonth() + 1}`,
     renewStatus: 'Renewed',
   });
+  const usesNegotiatorLabel = formData.projectCategory === 'Rental' || formData.projectCategory === 'Subsale CoA (SSCOA)';
 
   useEffect(() => {
     if (listingToEdit) {
@@ -48,7 +53,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
       setFormData({
         id: nextId,
         property: '',
-        projectCategory: 'Project Marketing (PM)',
+        projectCategory: defaultProjectCategory,
         location: '',
         tenure: 'Freehold',
         pm: '',
@@ -58,7 +63,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
         renewStatus: 'Renewed',
       });
     }
-  }, [listingToEdit, nextId, isOpen]);
+  }, [listingToEdit, nextId, isOpen, defaultProjectCategory]);
 
   if (!isOpen) return null;
 
@@ -122,7 +127,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
               <p className="text-xs text-slate-300">
                 {listingToEdit
                   ? `Editing Record #${String(listingToEdit.id).padStart(3, '0')}`
-                  : `Assigning Record #${String(nextId).padStart(3, '0')}`}
+                  : `Assigning Record #${String(displayNumber).padStart(3, '0')}`}
               </p>
             </div>
           </div>
@@ -171,7 +176,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
             </div>
           </div>
 
-          {/* Location & PM */}
+          {/* Location & assigned contact */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -190,13 +195,13 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
             <div className="flex flex-col gap-1">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                 <User className="w-3 h-3 text-slate-400" />
-                Assigned PM / Team
+                {usesNegotiatorLabel ? 'Negotiator / Agent / No Tel' : 'Assigned PM / Team'}
               </label>
               <input
                 type="text"
                 value={formData.pm || ''}
                 onChange={(e) => setFormData({ ...formData, pm: e.target.value })}
-                placeholder="e.g. Benik or Akram/Benik/Fb"
+                placeholder={usesNegotiatorLabel ? 'e.g. Negotiator / Agent / 012-3456789' : 'e.g. Benik or Akram/Benik/Fb'}
                 className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 text-indigo-700 font-medium"
               />
             </div>
