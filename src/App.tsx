@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { PropertyListing, FilterState, ExtractionResult, RenewStatus } from './types';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { PropertyListing, FilterState, ExtractionResult, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from './types';
 import { loadListings, saveListings } from './utils/storage';
 import { autoExpireListings, evaluateListingExpiry, isDatePassed } from './utils/dateUtils';
 import { Header } from './components/Header';
@@ -24,6 +24,7 @@ export default function App() {
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All'>('Project Marketing (PM)');
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
     projectCategory: 'All',
@@ -118,6 +119,17 @@ export default function App() {
   const handleFilterChange = (newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
     setActiveFilterTab('custom');
+  };
+
+  const sheetListings = useMemo(() => {
+    if (activeSheet === 'All') return listings;
+    return listings.filter((listing) => (listing.projectCategory || 'Project Marketing (PM)') === activeSheet);
+  }, [activeSheet, listings]);
+
+  const handleSheetChange = (sheet: ProjectCategory | 'All') => {
+    setActiveSheet(sheet);
+    setFilters((prev) => ({ ...prev, projectCategory: 'All', category: 'All' }));
+    setActiveFilterTab('all');
   };
 
   // Add or Edit save with automatic date expiration enforcement and Cloud SQL persistence
@@ -337,6 +349,7 @@ export default function App() {
     const rawListings: PropertyListing[] = extracted.map((e) => ({
       id: nextId++,
       property: e.property,
+      projectCategory: e.projectCategory || 'Project Marketing (PM)',
       location: e.location,
       tenure: e.tenure,
       pm: e.pm,
@@ -375,7 +388,7 @@ export default function App() {
     <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-900 font-sans overflow-hidden">
       {/* 1. Header Toolbar */}
       <Header
-        listings={listings}
+        listings={sheetListings}
         showKPIMetrics={showKPIMetrics}
         showAIAssistant={showAIAssistant}
         onToggleKPIMetrics={() => setShowKPIMetrics((prev) => !prev)}
@@ -398,10 +411,36 @@ export default function App() {
         onListingsUpdated={(newListings) => setListings(newListings)}
       />
 
+      <nav className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-slate-300 bg-slate-200 px-4 pt-2" aria-label="Listing sheets">
+        <button
+          onClick={() => handleSheetChange('All')}
+          className={`whitespace-nowrap rounded-t-md border border-b-0 px-4 py-2 text-xs font-semibold transition-colors ${
+            activeSheet === 'All'
+              ? 'border-slate-300 bg-white text-indigo-700'
+              : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          All Listings
+        </button>
+        {PROJECT_CATEGORIES.map((category) => (
+          <button
+            key={category}
+            onClick={() => handleSheetChange(category)}
+            className={`whitespace-nowrap rounded-t-md border border-b-0 px-4 py-2 text-xs font-semibold transition-colors ${
+              activeSheet === category
+                ? 'border-slate-300 bg-white text-indigo-700'
+                : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            {category}
+          </button>
+        ))}
+      </nav>
+
       {/* 2. Optional Top KPI Metric Highlights */}
       {showKPIMetrics && (
         <KPIMetrics
-          listings={listings}
+          listings={sheetListings}
           onFilterChange={handleKPITabChange}
           activeFilterTab={activeFilterTab}
         />
@@ -411,7 +450,7 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
         {/* Master Spreadsheet Table Area */}
         <MasterPropertyGrid
-          listings={listings}
+          listings={sheetListings}
           filters={filters}
           onFilterChange={handleFilterChange}
           onEditListing={(item) => {
@@ -434,7 +473,7 @@ export default function App() {
         {/* AI Studio Assistant Sidebar (Collapsible) */}
         {showAIAssistant && (
           <SidebarAssistant
-            listings={listings}
+            listings={sheetListings}
             onDraftPMAlert={handleDraftPMAlert}
             onOpenExtractModal={(initText) => {
               setExtractInitialText(initText || '');
