@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Trash2, X } from 'lucide-react';
 import { AuthRole, SessionUser } from '../context/AuthContext';
 
 interface UserManagementModalProps {
@@ -15,6 +15,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<AuthRole>('user');
   const [error, setError] = useState('');
+  const [editingUser, setEditingUser] = useState<SessionUser | null>(null);
 
   const loadUsers = async () => {
     const response = await fetch('/api/users');
@@ -30,8 +31,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   const createUser = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
-    const response = await fetch('/api/users', {
-      method: 'POST',
+    const response = await fetch(editingUser ? `/api/users/${editingUser.id}` : '/api/users', {
+      method: editingUser ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, displayName, password, role }),
     });
@@ -40,11 +41,39 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
       setError(data.error || 'Unable to create user.');
       return;
     }
+    resetForm();
+    await loadUsers();
+  };
+
+  const resetForm = () => {
+    setEditingUser(null);
     setUsername('');
     setDisplayName('');
     setPassword('');
     setShowPassword(false);
     setRole('user');
+    setError('');
+  };
+
+  const editUser = (item: SessionUser) => {
+    setEditingUser(item);
+    setUsername(item.username);
+    setDisplayName(item.displayName || '');
+    setPassword('');
+    setRole(item.role === 'admin' ? 'admin' : 'user');
+    setError('');
+  };
+
+  const deleteUser = async (item: SessionUser) => {
+    if (!window.confirm(`Delete user ${item.username}?`)) return;
+    setError('');
+    const response = await fetch(`/api/users/${item.id}`, { method: 'DELETE' });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error || 'Unable to delete user.');
+      return;
+    }
+    if (editingUser?.id === item.id) resetForm();
     await loadUsers();
   };
 
@@ -64,17 +93,20 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
         </div>
         <div className="grid gap-6 p-6 md:grid-cols-[1fr_1.2fr]">
           <form onSubmit={createUser} className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-800">Create account</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">{editingUser ? 'Edit account' : 'Create account'}</h3>
+              {editingUser && <button type="button" onClick={resetForm} className="text-xs text-slate-500 hover:text-indigo-600">Cancel edit</button>}
+            </div>
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" required className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display name" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
             <div className="relative">
               <input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password (8+ characters)"
+                placeholder={editingUser ? 'New password (optional)' : 'Password (8+ characters)'}
                 type={showPassword ? 'text' : 'password'}
-                minLength={8}
-                required
+                minLength={editingUser ? undefined : 8}
+                required={!editingUser}
                 className="w-full rounded border border-slate-300 px-3 py-2 pr-10 text-sm"
               />
               <button
@@ -91,16 +123,22 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
               <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
-            <button className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create user</button>
+            <button className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">{editingUser ? 'Save changes' : 'Create user'}</button>
             {error && <p className="text-xs text-rose-600">{error}</p>}
           </form>
           <div>
             <h3 className="mb-2 text-sm font-semibold text-slate-800">Existing accounts</h3>
             <div className="divide-y divide-slate-200 rounded border border-slate-200">
               {users.map((item) => (
-                <div key={item.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span className="font-medium text-slate-800">{item.displayName || item.username}</span>
-                  <span className="text-xs uppercase text-slate-500">{item.role}</span>
+                <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium text-slate-800">{item.displayName || item.username}</span>
+                    <span className="block truncate text-xs text-slate-500">{item.username} · {item.role}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button onClick={() => editUser(item)} className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-indigo-600" title={`Edit ${item.username}`} aria-label={`Edit ${item.username}`}><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => void deleteUser(item)} className="rounded p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600" title={`Delete ${item.username}`} aria-label={`Delete ${item.username}`}><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
                 </div>
               ))}
             </div>
