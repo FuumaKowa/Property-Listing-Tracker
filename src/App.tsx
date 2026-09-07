@@ -29,7 +29,8 @@ export default function App() {
 }
 
 function Workspace() {
-  const userName = 'Team Member';
+  const { user } = useAuth();
+  const userName = user?.displayName || user?.username || 'Team Member';
   const token = null;
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);

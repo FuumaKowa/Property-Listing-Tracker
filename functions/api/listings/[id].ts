@@ -25,8 +25,9 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
         date = COALESCE($8, date),
         renew_status = COALESCE($9, renew_status),
         notes = COALESCE($10, notes),
-        updated_by_name = COALESCE($11, updated_by_name),
-        updated_by_email = COALESCE($12, updated_by_email),
+        updated_by_user_id = $11,
+        updated_by_name = $12,
+        updated_by_email = NULL,
         last_updated_at = NOW()
       WHERE id = $13
       RETURNING ${listingColumns}
@@ -41,8 +42,8 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
       body.date ?? null,
       body.renewStatus ?? null,
       body.notes ?? null,
-      body.updatedByName ?? null,
-      body.updatedByEmail ?? null,
+      String(user.id),
+      user.displayName || user.username,
       id,
     ]);
 
