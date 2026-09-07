@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { PropertyListing, TenureType, ListingStatus, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from '../../types';
 import { Building2, X, Check, Calendar, MapPin, User, Layers, Shield, Clock, AlertTriangle, UserCheck, Tag } from 'lucide-react';
 import { getDateStatusInfo, isDatePassed } from '../../utils/dateUtils';
-import { useAuth } from '../../context/AuthContext';
 
 interface ListingFormModalProps {
   isOpen: boolean;
@@ -19,7 +18,6 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
   onSave,
   nextId,
 }) => {
-  const { userName, currentUser } = useAuth();
   const [formData, setFormData] = useState<Partial<PropertyListing>>({
     property: '',
     projectCategory: 'Project Marketing (PM)',
@@ -96,8 +94,8 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
       status: computedStatus,
       date: dateStr,
       renewStatus: (formData.renewStatus as RenewStatus) || 'Not Renewed',
-      updatedByName: userName || 'Team Member',
-      updatedByEmail: currentUser?.email || undefined,
+      updatedByName: 'Team Member',
+      updatedByEmail: undefined,
       lastUpdatedAt: new Date().toISOString(),
     };
 
@@ -341,7 +339,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
               <span>
-                Saving as: <strong className="text-slate-800">{userName || 'Team Member'}</strong>
+                Saving as: <strong className="text-slate-800">Team Member</strong>
               </span>
             </div>
 
