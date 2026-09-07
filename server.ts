@@ -8,6 +8,7 @@ import { optionalAuth, requireAuth, AuthRequest } from './src/middleware/auth.ts
 import {
   getAllListingsFromDb,
   getListingsForUser,
+  claimUnownedListings,
   createListingInDb,
   updateListingInDb,
   deleteListingFromDb,
@@ -602,6 +603,7 @@ app.get('/api/listings', requireAuth, async (req: AuthRequest, res: Response) =>
       return res.status(401).json({ error: 'Unauthorized: user not found' });
     }
 
+    await claimUnownedListings(userUid);
     const data = await getListingsForUser(userUid);
     res.json({ success: true, data });
   } catch (error: any) {

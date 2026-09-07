@@ -1,6 +1,6 @@
 import { db } from './index.ts';
 import { users, listings, listingAuditLogs } from './schema.ts';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, isNull } from 'drizzle-orm';
 import { INITIAL_PROPERTY_LISTINGS } from '../data/initialData.ts';
 import { PropertyListing } from '../types.ts';
 
@@ -81,6 +81,20 @@ export async function getListingsForUser(uid: string) {
   } catch (error) {
     console.error(`Database query for listings for user ${uid} failed:`, error);
     throw new Error('Database query for user listings failed', { cause: error });
+  }
+}
+
+// Existing rows created before per-user ownership was enabled have no owner.
+// Claim them once for the first authenticated account so the original dataset is not lost.
+export async function claimUnownedListings(uid: string) {
+  try {
+    await db
+      .update(listings)
+      .set({ updatedByUserId: uid })
+      .where(isNull(listings.updatedByUserId));
+  } catch (error) {
+    console.error(`Failed to claim legacy listings for user ${uid}:`, error);
+    throw new Error('Failed to assign legacy listings to the signed-in user', { cause: error });
   }
 }
 
