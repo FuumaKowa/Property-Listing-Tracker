@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>Property Listing Tracker</title>
+  <rect width="64" height="64" rx="14" fill="#434a78"/>
+  <path d="M14 51V25l18-12 18 12v26H14Z" fill="#fff"/>
+  <path d="M21 51V29h22v22" fill="#dfe4ff"/>
+  <path d="M27 35h4v5h-4zm7 0h4v5h-4zm-7 9h4v5h-4zm7 0h4v5h-4z" fill="#434a78"/>
+  <path d="M12 51h40" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+</svg>
