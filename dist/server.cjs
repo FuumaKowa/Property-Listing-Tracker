@@ -34,59 +34,6 @@ var import_path = __toESM(require("path"), 1);
 var import_url = require("url");
 var import_vite = require("vite");
 
-// src/lib/firebase-admin.ts
-var import_app = require("firebase-admin/app");
-var import_auth = require("firebase-admin/auth");
-
-// firebase-applet-config.json
-var firebase_applet_config_default = {
-  apiKey: "AIzaSyDqCTpLAvfmevA3dte_aZVQ1rwpAaMB3qg",
-  authDomain: "property-listing-tracker.firebaseapp.com",
-  projectId: "property-listing-tracker",
-  storageBucket: "property-listing-tracker.firebasestorage.app",
-  messagingSenderId: "924434934472",
-  appId: "1:924434934472:web:8ed27e53751b330b0cd3fd",
-  measurementId: "G-2PNRWMLSB7"
-};
-
-// src/lib/firebase-admin.ts
-if (!(0, import_app.getApps)().length) {
-  (0, import_app.initializeApp)({
-    projectId: firebase_applet_config_default.projectId
-  });
-}
-var adminAuth = (0, import_auth.getAuth)();
-
-// src/middleware/auth.ts
-var requireAuth = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized: Missing token" });
-  }
-  const token = authHeader.split("Bearer ")[1];
-  try {
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    console.error("Error verifying Firebase ID token:", error);
-    return res.status(401).json({ error: "Unauthorized: Invalid token" });
-  }
-};
-var optionalAuth = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.split("Bearer ")[1];
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(token);
-      req.user = decodedToken;
-    } catch (err) {
-      console.warn("Optional token verification failed, proceeding as guest:", err);
-    }
-  }
-  next();
-};
-
 // src/db/index.ts
 var import_config = require("dotenv/config");
 var import_node_postgres = require("drizzle-orm/node-postgres");
@@ -178,42 +125,339 @@ var db = (0, import_node_postgres.drizzle)(pool, { schema: schema_exports });
 
 // src/db/listings.ts
 var import_drizzle_orm2 = require("drizzle-orm");
-async function getOrCreateUser(uid, email, displayName, photoUrl) {
-  try {
-    const result = await db.insert(users).values({
-      uid,
-      email,
-      displayName: displayName || email.split("@")[0],
-      photoUrl: photoUrl || null
-    }).onConflictDoUpdate({
-      target: users.uid,
-      set: {
-        email,
-        displayName: displayName || email.split("@")[0],
-        photoUrl: photoUrl || null,
-        lastLoginAt: /* @__PURE__ */ new Date()
-      }
-    }).returning();
-    return result[0];
-  } catch (error) {
-    console.error("Failed to sync user to database:", error);
-    throw new Error("Failed to register or sync user profile", { cause: error });
+
+// src/data/initialData.ts
+var INITIAL_PROPERTY_LISTINGS = [
+  {
+    id: 1,
+    property: "Ss Taman Kenanga",
+    projectCategory: "Project Marketing (PM)",
+    location: "Sabak Bernam, Selangor",
+    tenure: "Freehold",
+    pm: "Benik",
+    availableUnits: "10/62",
+    status: "Active",
+    date: "23.10",
+    renewStatus: "Renewed"
+  },
+  {
+    id: 2,
+    property: "Ds First Vista",
+    projectCategory: "Project Marketing (PM)",
+    location: "Sabak Bernam, Selangor",
+    tenure: "Freehold",
+    pm: "Akram/Benik/Fb",
+    availableUnits: "18/34",
+    status: "Active",
+    date: "25.10",
+    renewStatus: "Renewed"
+  },
+  {
+    id: 3,
+    property: "Ss Taman Dorani Sejahtera",
+    projectCategory: "Subsale Direct Listing (SSDL)",
+    location: "Sungai Besar, Selangor",
+    tenure: "Freehold",
+    pm: "Sariza",
+    availableUnits: "16/41",
+    status: "Active",
+    date: "25.10",
+    renewStatus: "Renewed"
+  },
+  {
+    id: 4,
+    property: "Galaxy Avenue Shoplot",
+    projectCategory: "Rental",
+    location: "Puncak Alam",
+    tenure: "-",
+    pm: "Shazni",
+    availableUnits: "59/204",
+    status: "Active",
+    date: "28.8",
+    renewStatus: "Want to be renew"
+  },
+  {
+    id: 5,
+    property: "Ds Taman Satria",
+    projectCategory: "Subsale CoA (SSCOA)",
+    location: "Teluk Panglima Garang, Selangor",
+    tenure: "Leasehold",
+    pm: "Akram",
+    availableUnits: "5/22",
+    status: "Expired",
+    date: "18.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 6,
+    property: "Bungalow Desa Bukit Kerayong",
+    projectCategory: "Million Dollar Property (MD)",
+    location: "Puncak Alam, Selangor",
+    tenure: "Leasehold",
+    pm: "Benik",
+    availableUnits: "7/242",
+    status: "Expired",
+    date: "18.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 7,
+    property: "Semi D Taman Dato Harun",
+    projectCategory: "Auction",
+    location: "Pulau Indah, Klang, Selangor",
+    tenure: "Freehold",
+    pm: "Akram",
+    availableUnits: "5/28",
+    status: "Expired",
+    date: "18.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 8,
+    property: "APT E-sentral Smart City",
+    projectCategory: "Project Marketing (PM)",
+    location: "Subang Bestari, Shah Alam, Selangor",
+    tenure: "-",
+    pm: "Nor Ozir",
+    availableUnits: "784",
+    status: "Expired",
+    date: "18.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 9,
+    property: "Astana",
+    projectCategory: "Subsale CoA (SSCOA)",
+    location: "Chemor, Perak",
+    tenure: "-",
+    pm: "Fahmy Osman",
+    availableUnits: "12/70",
+    status: "Expired",
+    date: "18.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 10,
+    property: "Santorini Apartment @ Botani",
+    projectCategory: "Rental",
+    location: "Ipoh, Perak",
+    tenure: "-",
+    pm: "Fahmy Osman",
+    availableUnits: "94",
+    status: "Expired",
+    date: "21.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 11,
+    property: "Ss J3 Residence, Jenderam Lestari",
+    projectCategory: "Project Marketing (PM)",
+    location: "Jenderam Hilir, Dengkil, Selangor",
+    tenure: "Freehold Malay Reserved",
+    pm: "Zuraini",
+    availableUnits: "45/125",
+    status: "Expired",
+    date: "21.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 12,
+    property: "Ss J2 Residence, Jenderam Lestari",
+    projectCategory: "Project Marketing (PM)",
+    location: "Jenderam Hilir, Dengkil, Selangor",
+    tenure: "Freehold Malay Reserved",
+    pm: "Zuraini",
+    availableUnits: "0/80",
+    status: "Expired",
+    date: "21.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 13,
+    property: "Bungalow Indahville 2",
+    projectCategory: "Million Dollar Property (MD)",
+    location: "Pulau Indah, Klang, Selangor",
+    tenure: "Freehold Malay Reserved",
+    pm: "Zuraini",
+    availableUnits: "0/17",
+    status: "Expired",
+    date: "22.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 14,
+    property: "Ss Indahville 4",
+    projectCategory: "Subsale Direct Listing (SSDL)",
+    location: "Pulau Indah, Klang, Selangor",
+    tenure: "Freehold Malay Reserved",
+    pm: "Zuraini",
+    availableUnits: "10/46",
+    status: "Expired",
+    date: "22.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 15,
+    property: "Double Storey Pavonia",
+    projectCategory: "Project Marketing (PM)",
+    location: "Bukit Bandaraya, Shah Alam, Selangor",
+    tenure: "-",
+    pm: "Haneah",
+    availableUnits: "19/130",
+    status: "Active",
+    date: "26.10",
+    renewStatus: "Renewed"
+  },
+  {
+    id: 16,
+    property: "Bungalow Amber 1 & 2",
+    projectCategory: "Million Dollar Property (MD)",
+    location: "Subang Bestari, Shah Alam, Selangor",
+    tenure: "-",
+    pm: "Haneah",
+    availableUnits: "5/15",
+    status: "Active",
+    date: "26.10",
+    renewStatus: "Renewed"
+  },
+  {
+    id: 17,
+    property: "Service Apartment Linkar 52",
+    projectCategory: "Project Marketing (PM)",
+    location: "Shah Alam",
+    tenure: "-",
+    pm: "Haneah",
+    availableUnits: "256/495",
+    status: "Active",
+    date: "26.10",
+    renewStatus: "Renewed"
+  },
+  {
+    id: 18,
+    property: "Dsth Tamanhijrah",
+    projectCategory: "Auction",
+    location: "Rantau Panjang Klang",
+    tenure: "-",
+    pm: "Dsn / Iza",
+    availableUnits: "3",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Want to be renew"
+  },
+  {
+    id: 19,
+    property: "Residensi Perintis Satu",
+    projectCategory: "Project Marketing (PM)",
+    location: "Seksyen 29, Shah Alam",
+    tenure: "-",
+    pm: "Che Mad",
+    availableUnits: "31/40",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 20,
+    property: "Residensi Bayu Timur Condo",
+    projectCategory: "Rental",
+    location: "Seksyen 32, Shah Alam",
+    tenure: "-",
+    pm: "Che Mad",
+    availableUnits: "518",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 21,
+    property: "Sssd Tmn Desa Idaman",
+    projectCategory: "Subsale CoA (SSCOA)",
+    location: "Olak Lempit Banting",
+    tenure: "Freehold Malay Reserved",
+    pm: "Nor Ozir",
+    availableUnits: "8/28",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 22,
+    property: "Ss Taman Kelana",
+    projectCategory: "Auction",
+    location: "Kapar",
+    tenure: "Leasehold",
+    pm: "Nor Ozir",
+    availableUnits: "0/24",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 23,
+    property: "Double Storey Tmn Orchid",
+    projectCategory: "Subsale Direct Listing (SSDL)",
+    location: "Meru Klang",
+    tenure: "-",
+    pm: "Sariza",
+    availableUnits: "7/24",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 24,
+    property: "Double Storey Terrace Tenera",
+    projectCategory: "Project Marketing (PM)",
+    location: "Semenyih",
+    tenure: "-",
+    pm: "SAM Lai",
+    availableUnits: "17/26",
+    status: "Active",
+    date: "24.8",
+    renewStatus: "Not Renewed"
+  },
+  {
+    id: 25,
+    property: "Rsku",
+    projectCategory: "Project Marketing (PM)",
+    location: "Shah Alam U9",
+    tenure: "-",
+    pm: "Dsn / Ikhwan",
+    availableUnits: "70% Booking",
+    status: "Active",
+    date: "26.10",
+    renewStatus: "Renewed"
   }
-}
-async function getListingsForUser(uid) {
+];
+
+// src/db/listings.ts
+async function getAllListingsFromDb() {
   try {
-    return await db.select().from(listings).where((0, import_drizzle_orm2.eq)(listings.updatedByUserId, uid)).orderBy(listings.id);
+    let all = await db.select().from(listings).orderBy(listings.id);
+    if (all.length === 0 && INITIAL_PROPERTY_LISTINGS.length > 0) {
+      console.log("Seeding initial property listings to Cloud SQL...");
+      const toInsert = INITIAL_PROPERTY_LISTINGS.map((item) => ({
+        property: item.property,
+        projectCategory: item.projectCategory || "Project Marketing (PM)",
+        location: item.location,
+        tenure: item.tenure,
+        pm: item.pm,
+        availableUnits: item.availableUnits,
+        status: item.status,
+        date: item.date,
+        renewStatus: item.renewStatus,
+        notes: item.notes || null,
+        updatedByName: "System Seed",
+        updatedByEmail: "system@internal",
+        lastUpdatedAt: /* @__PURE__ */ new Date()
+      }));
+      await db.insert(listings).values(toInsert);
+      all = await db.select().from(listings).orderBy(listings.id);
+    }
+    return all;
   } catch (error) {
-    console.error(`Database query for listings for user ${uid} failed:`, error);
-    throw new Error("Database query for user listings failed", { cause: error });
-  }
-}
-async function claimUnownedListings(uid) {
-  try {
-    await db.update(listings).set({ updatedByUserId: uid }).where((0, import_drizzle_orm2.isNull)(listings.updatedByUserId));
-  } catch (error) {
-    console.error(`Failed to claim legacy listings for user ${uid}:`, error);
-    throw new Error("Failed to assign legacy listings to the signed-in user", { cause: error });
+    console.error("Database query for listings failed:", error);
+    throw new Error("Database query for listings failed", { cause: error });
   }
 }
 async function createListingInDb(data, userInfo) {
@@ -803,13 +1047,6 @@ function localStandardize(listing) {
   };
 }
 function extractUserInfo(req) {
-  if (req.user) {
-    return {
-      uid: req.user.uid,
-      name: req.user.name || (req.user.email ? req.user.email.split("@")[0] : "Authenticated User"),
-      email: req.user.email || void 0
-    };
-  }
   const headerName = req.headers["x-user-name"];
   const headerEmail = req.headers["x-user-email"];
   const bodyName = req.body?.updatedByName || req.body?.userName;
@@ -819,40 +1056,17 @@ function extractUserInfo(req) {
     email: headerEmail || bodyEmail || void 0
   };
 }
-app.post("/api/users/sync", optionalAuth, async (req, res) => {
+app.get("/api/listings", async (req, res) => {
   try {
-    const { uid, email, displayName, photoUrl } = req.body;
-    const userUid = req.user?.uid || uid;
-    const userEmail = req.user?.email || email;
-    if (!userUid || !userEmail) {
-      return res.status(400).json({ error: "UID and email are required" });
-    }
-    const user = await getOrCreateUser(userUid, userEmail, displayName, photoUrl);
-    res.json({ success: true, user });
-  } catch (error) {
-    console.error("Failed to sync user:", error);
-    res.status(500).json({ error: error.message || "Failed to sync user" });
-  }
-});
-app.get("/api/listings", requireAuth, async (req, res) => {
-  try {
-    const userUid = req.user?.uid;
-    if (!userUid) {
-      return res.status(401).json({ error: "Unauthorized: user not found" });
-    }
-    await claimUnownedListings(userUid);
-    const data = await getListingsForUser(userUid);
+    const data = await getAllListingsFromDb();
     res.json({ success: true, data });
   } catch (error) {
     console.warn("Database query failed for /api/listings:", error?.message || error);
     res.status(500).json({ error: "Failed to load your listings" });
   }
 });
-app.post("/api/listings", optionalAuth, async (req, res) => {
+app.post("/api/listings", async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Unauthorized: sign in to save listings" });
-    }
     const userInfo = extractUserInfo(req);
     const created = await createListingInDb(req.body, userInfo);
     res.status(201).json({ success: true, data: created });
@@ -862,11 +1076,8 @@ app.post("/api/listings", optionalAuth, async (req, res) => {
     res.status(201).json({ success: true, data: { id: fallbackId, ...req.body }, fallback: true });
   }
 });
-app.patch("/api/listings/:id", optionalAuth, async (req, res) => {
+app.patch("/api/listings/:id", async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Unauthorized: sign in to update listings" });
-    }
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid listing ID" });
@@ -880,11 +1091,8 @@ app.patch("/api/listings/:id", optionalAuth, async (req, res) => {
     res.json({ success: true, data: { id, ...req.body }, fallback: true });
   }
 });
-app.delete("/api/listings/:id", optionalAuth, async (req, res) => {
+app.delete("/api/listings/:id", async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Unauthorized: sign in to delete listings" });
-    }
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid listing ID" });

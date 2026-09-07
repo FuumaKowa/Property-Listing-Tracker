@@ -1,5 +1,4 @@
 import { ExtractionResult, PropertyListing, PMAlertDraft, StandardizationResult, ListingAuditEntry } from '../types';
-import { loadListings } from '../utils/storage';
 
 // Helper to build headers including Auth token and user attribution
 function getHeaders(token?: string | null, userName?: string, userEmail?: string): HeadersInit {
@@ -21,10 +20,6 @@ function getHeaders(token?: string | null, userName?: string, userEmail?: string
 // 1. Fetch all listings from Cloud SQL
 export async function fetchListingsFromCloudSql(token?: string | null): Promise<PropertyListing[]> {
   try {
-    if (!token) {
-      return [];
-    }
-
     const res = await fetch('/api/listings', {
       headers: getHeaders(token),
     });

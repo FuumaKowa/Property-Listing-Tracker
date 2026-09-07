@@ -4,16 +4,12 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { optionalAuth, requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import {
   getAllListingsFromDb,
-  getListingsForUser,
-  claimUnownedListings,
   createListingInDb,
   updateListingInDb,
   deleteListingFromDb,
   getAuditLogs,
-  getOrCreateUser,
 } from './src/db/listings.ts';
 import { INITIAL_PROPERTY_LISTINGS } from './src/data/initialData.ts';
 
@@ -555,15 +551,7 @@ function localStandardize(listing: any) {
 // ==========================================
 
 // Helper to extract user attribution info from request (Firebase Auth or guest header/body)
-function extractUserInfo(req: AuthRequest) {
-  if (req.user) {
-    return {
-      uid: req.user.uid,
-      name: (req.user.name as string) || (req.user.email ? (req.user.email as string).split('@')[0] : 'Authenticated User'),
-      email: (req.user.email as string) || undefined,
-    };
-  }
-
+function extractUserInfo(req: Request) {
   // Fallback: client-provided user name from profile or header
   const headerName = req.headers['x-user-name'] as string;
   const headerEmail = req.headers['x-user-email'] as string;
@@ -576,35 +564,10 @@ function extractUserInfo(req: AuthRequest) {
   };
 }
 
-// 1. Sync / Register user in Cloud SQL
-app.post('/api/users/sync', optionalAuth, async (req: AuthRequest, res: Response) => {
+// 1. Get all listings from Cloud SQL
+app.get('/api/listings', async (req: Request, res: Response) => {
   try {
-    const { uid, email, displayName, photoUrl } = req.body;
-    const userUid = req.user?.uid || uid;
-    const userEmail = req.user?.email || email;
-
-    if (!userUid || !userEmail) {
-      return res.status(400).json({ error: 'UID and email are required' });
-    }
-
-    const user = await getOrCreateUser(userUid, userEmail, displayName, photoUrl);
-    res.json({ success: true, user });
-  } catch (error: any) {
-    console.error('Failed to sync user:', error);
-    res.status(500).json({ error: error.message || 'Failed to sync user' });
-  }
-});
-
-// 2. Get all listings for the authenticated user only
-app.get('/api/listings', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const userUid = req.user?.uid;
-    if (!userUid) {
-      return res.status(401).json({ error: 'Unauthorized: user not found' });
-    }
-
-    await claimUnownedListings(userUid);
-    const data = await getListingsForUser(userUid);
+    const data = await getAllListingsFromDb();
     res.json({ success: true, data });
   } catch (error: any) {
     console.warn('Database query failed for /api/listings:', error?.message || error);
@@ -612,13 +575,9 @@ app.get('/api/listings', requireAuth, async (req: AuthRequest, res: Response) =>
   }
 });
 
-// 3. Create listing with user name and timestamp attribution
-app.post('/api/listings', optionalAuth, async (req: AuthRequest, res: Response) => {
+// 2. Create listing with user name and timestamp attribution
+app.post('/api/listings', async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Unauthorized: sign in to save listings' });
-    }
-
     const userInfo = extractUserInfo(req);
     const created = await createListingInDb(req.body, userInfo);
     res.status(201).json({ success: true, data: created });
@@ -629,13 +588,9 @@ app.post('/api/listings', optionalAuth, async (req: AuthRequest, res: Response) 
   }
 });
 
-// 4. Update listing with user name and timestamp attribution
-app.patch('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
+// 3. Update listing with user name and timestamp attribution
+app.patch('/api/listings/:id', async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Unauthorized: sign in to update listings' });
-    }
-
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid listing ID' });
@@ -651,13 +606,9 @@ app.patch('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Respo
   }
 });
 
-// 5. Delete listing
-app.delete('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
+// 4. Delete listing
+app.delete('/api/listings/:id', async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Unauthorized: sign in to delete listings' });
-    }
-
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid listing ID' });
