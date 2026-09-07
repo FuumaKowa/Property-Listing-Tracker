@@ -23,6 +23,7 @@ export default function App() {
   const token = null;
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
     projectCategory: 'All',
@@ -55,27 +56,26 @@ export default function App() {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditListingTarget, setAuditListingTarget] = useState<{ id?: number; property?: string }>({});
 
+  const refreshListings = useCallback(async () => {
+    setIsDbLoaded(false);
+    setIsRefreshing(true);
+    try {
+      const dbListings = await fetchListingsFromCloudSql();
+      const { updatedListings } = autoExpireListings(dbListings || []);
+      setListings(updatedListings);
+      saveListings(updatedListings);
+    } catch (err) {
+      console.warn('Could not load listings from Cloud SQL:', err);
+    } finally {
+      setIsDbLoaded(true);
+      setIsRefreshing(false);
+    }
+  }, []);
+
   // Initial load from Cloud SQL
   useEffect(() => {
-    setIsDbLoaded(false);
-    fetchListingsFromCloudSql()
-      .then((dbListings) => {
-        if (dbListings && dbListings.length > 0) {
-          const { updatedListings } = autoExpireListings(dbListings);
-          setListings(updatedListings);
-          saveListings(updatedListings);
-        } else {
-          setListings([]);
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not load user listings from Cloud SQL:', err);
-        setListings([]);
-      })
-      .finally(() => {
-        setIsDbLoaded(true);
-      });
-  }, []);
+    void refreshListings();
+  }, [refreshListings]);
 
   // Periodic automatic date check: ensures status is synchronized with listing date (Active if not passed, Expired if passed)
   useEffect(() => {
@@ -393,6 +393,8 @@ export default function App() {
           setAuditListingTarget({});
           setIsAuditModalOpen(true);
         }}
+        onRefreshListings={refreshListings}
+        isRefreshing={isRefreshing}
         onListingsUpdated={(newListings) => setListings(newListings)}
       />
 

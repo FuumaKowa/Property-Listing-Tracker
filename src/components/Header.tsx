@@ -12,6 +12,7 @@ import {
   BarChart2,
   History,
   Database,
+  RefreshCw,
 } from 'lucide-react';
 import { PropertyListing } from '../types';
 import { exportToCSV, parseCSVToListings, resetListings } from '../utils/storage';
@@ -26,6 +27,8 @@ interface HeaderProps {
   onOpenExtractModal: () => void;
   onOpenStandardizeModal: () => void;
   onOpenAuditModal: () => void;
+  onRefreshListings: () => Promise<void>;
+  isRefreshing: boolean;
   onListingsUpdated: (newListings: PropertyListing[]) => void;
 }
 
@@ -39,6 +42,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExtractModal,
   onOpenStandardizeModal,
   onOpenAuditModal,
+  onRefreshListings,
+  isRefreshing,
   onListingsUpdated,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +181,16 @@ export const Header: React.FC<HeaderProps> = ({
           <span>Cloud SQL</span>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
         </div>
+
+        <button
+          onClick={onRefreshListings}
+          disabled={isRefreshing}
+          className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded text-xs transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-50"
+          title="Refresh listings from database"
+          aria-label="Refresh listings from database"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
 
         <div className="h-5 w-[1px] bg-slate-200"></div>
 
