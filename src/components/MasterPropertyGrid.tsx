@@ -347,7 +347,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
 
       {/* Spreadsheet Container with Centered Header Title */}
       <div className="flex-1 overflow-auto bg-slate-50 p-4">
-        <div className="max-w-[1300px] mx-auto bg-white shadow-xs border border-slate-300 rounded-sm overflow-hidden">
+        <div className="max-w-[1800px] mx-auto bg-white shadow-xs border border-slate-300 rounded-sm overflow-hidden">
           {/* Centered Tracker Title Bar exactly like the user's uploaded spreadsheet */}
           <div className="bg-white py-2.5 text-center border-b border-slate-300">
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
@@ -356,7 +356,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
           </div>
 
           {/* Master Spreadsheet Table */}
-          <table className="w-full text-left border-collapse text-[13px]">
+          <table className="w-full min-w-[1700px] text-left border-collapse text-[13px]">
             {/* Dark Purple-Blue Header row (#434a78) */}
             <thead>
               <tr className="bg-[#434a78] text-white font-bold border-b border-slate-300 text-xs sm:text-[13px] select-none">
@@ -380,37 +380,37 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                 </th>
                 <th
                   onClick={() => handleSort('property')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[180px] cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-3 py-2 min-w-[220px] cursor-pointer hover:bg-[#383e66]"
                 >
                   Property
                 </th>
                 <th
                   onClick={() => handleSort('projectCategory')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[155px] cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-3 py-2 min-w-[200px] cursor-pointer hover:bg-[#383e66]"
                 >
                   Project Category
                 </th>
                 <th
                   onClick={() => handleSort('location')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[200px] cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-3 py-2 min-w-[260px] cursor-pointer hover:bg-[#383e66]"
                 >
                   Location
                 </th>
                 <th
                   onClick={() => handleSort('tenure')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[140px] cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-3 py-2 min-w-[160px] cursor-pointer hover:bg-[#383e66]"
                 >
                   Tenure
                 </th>
                 <th
                   onClick={() => handleSort('pm')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[110px] cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]"
                 >
                   PM
                 </th>
                 <th
                   onClick={() => handleSort('availableUnits')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[100px] cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-3 py-2 min-w-[130px] cursor-pointer hover:bg-[#383e66]"
                 >
                   Available Units
                 </th>
@@ -434,7 +434,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                 </th>
                 <th
                   onClick={() => handleSort('lastUpdatedAt')}
-                  className="border border-slate-400/50 px-2.5 py-2 min-w-[130px] text-left cursor-pointer hover:bg-[#383e66]"
+                  className="border border-slate-400/50 px-2.5 py-2 min-w-[170px] text-left cursor-pointer hover:bg-[#383e66]"
                   title="Who updated the listing and when"
                 >
                   Updated By & When
