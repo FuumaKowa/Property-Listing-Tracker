@@ -71,6 +71,19 @@ export async function getAllListingsFromDb() {
   }
 }
 
+export async function getListingsForUser(uid: string) {
+  try {
+    return await db
+      .select()
+      .from(listings)
+      .where(eq(listings.updatedByUserId, uid))
+      .orderBy(listings.id);
+  } catch (error) {
+    console.error(`Database query for listings for user ${uid} failed:`, error);
+    throw new Error('Database query for user listings failed', { cause: error });
+  }
+}
+
 // Create new listing with audit attribution
 export async function createListingInDb(
   data: {

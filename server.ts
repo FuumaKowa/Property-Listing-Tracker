@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { optionalAuth, requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import {
   getAllListingsFromDb,
+  getListingsForUser,
   createListingInDb,
   updateListingInDb,
   deleteListingFromDb,
@@ -593,23 +594,29 @@ app.post('/api/users/sync', optionalAuth, async (req: AuthRequest, res: Response
   }
 });
 
-// 2. Get all listings from Cloud SQL (with graceful fallback to initial listings)
-app.get('/api/listings', async (req: Request, res: Response) => {
+// 2. Get all listings for the authenticated user only
+app.get('/api/listings', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const data = await getAllListingsFromDb();
-    if (!data || data.length === 0) {
-      return res.json({ success: true, data: INITIAL_PROPERTY_LISTINGS });
+    const userUid = req.user?.uid;
+    if (!userUid) {
+      return res.status(401).json({ error: 'Unauthorized: user not found' });
     }
+
+    const data = await getListingsForUser(userUid);
     res.json({ success: true, data });
   } catch (error: any) {
-    console.warn('Database query failed for /api/listings, serving initial listings cache:', error?.message || error);
-    res.json({ success: true, data: INITIAL_PROPERTY_LISTINGS, fallback: true });
+    console.warn('Database query failed for /api/listings:', error?.message || error);
+    res.status(500).json({ error: 'Failed to load your listings' });
   }
 });
 
 // 3. Create listing with user name and timestamp attribution
 app.post('/api/listings', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized: sign in to save listings' });
+    }
+
     const userInfo = extractUserInfo(req);
     const created = await createListingInDb(req.body, userInfo);
     res.status(201).json({ success: true, data: created });
@@ -623,6 +630,10 @@ app.post('/api/listings', optionalAuth, async (req: AuthRequest, res: Response) 
 // 4. Update listing with user name and timestamp attribution
 app.patch('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized: sign in to update listings' });
+    }
+
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid listing ID' });
@@ -641,6 +652,10 @@ app.patch('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Respo
 // 5. Delete listing
 app.delete('/api/listings/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized: sign in to delete listings' });
+    }
+
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid listing ID' });

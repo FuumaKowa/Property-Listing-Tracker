@@ -20,7 +20,7 @@ import {
 } from './services/api';
 
 export default function App() {
-  const { userName, currentUser, token } = useAuth();
+  const { userName, currentUser, token, loading, signInWithGoogle } = useAuth();
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -57,7 +57,14 @@ export default function App() {
 
   // Initial load from Cloud SQL
   useEffect(() => {
-    fetchListingsFromCloudSql()
+    if (!currentUser || !token) {
+      setListings([]);
+      setIsDbLoaded(true);
+      return;
+    }
+
+    setIsDbLoaded(false);
+    fetchListingsFromCloudSql(token)
       .then((dbListings) => {
         if (dbListings && dbListings.length > 0) {
           const { updatedListings } = autoExpireListings(dbListings);
@@ -68,13 +75,54 @@ export default function App() {
         }
       })
       .catch((err) => {
-        console.warn('Could not load from Cloud SQL, no local fallback will be used:', err);
+        console.warn('Could not load user listings from Cloud SQL:', err);
         setListings([]);
       })
       .finally(() => {
         setIsDbLoaded(true);
       });
   }, [token, userName, currentUser?.email]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-100 text-slate-700">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-8 py-6 shadow-sm">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+          <p className="text-sm font-medium">Loading your workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-100 px-6">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+            <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M7 18a4 4 0 0 1 8 0M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Sign in to continue</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Your property data is kept separate per account, so each user only sees their own listings.
+          </p>
+          <button
+            onClick={signInWithGoogle}
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-indigo-700"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <path d="M21.6 12.23c0-.69-.06-1.35-.18-1.99H12v3.77h5.39a4.6 4.6 0 0 1-1.98 3.02v2.5h3.2c1.88-1.73 2.99-4.29 2.99-7.3Z" />
+              <path d="M12 22c2.7 0 4.95-.9 6.6-2.43l-3.2-2.5c-.9.6-2.05.96-3.4.96-2.6 0-4.8-1.76-5.58-4.13H.9v2.6A10 10 0 0 0 12 22Z" />
+              <path d="M6.42 19.89A6.02 6.02 0 0 1 6 16.6V14h-2.6A6.27 6.27 0 0 0 .9 17.7c.84 1.7 2.06 3.13 3.52 4.19Z" />
+              <path d="M12 4.98c1.18 0 2.25.41 3.09 1.21l2.31-2.31A9.95 9.95 0 0 0 12 2a10 10 0 0 0-9.1 5.52L5.5 8.12A6 6 0 0 1 12 4.98Z" />
+            </svg>
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Periodic automatic date check: ensures status is synchronized with listing date (Active if not passed, Expired if passed)
   useEffect(() => {

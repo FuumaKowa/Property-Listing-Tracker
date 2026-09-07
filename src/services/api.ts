@@ -19,26 +19,35 @@ function getHeaders(token?: string | null, userName?: string, userEmail?: string
 }
 
 // 1. Fetch all listings from Cloud SQL
-export async function fetchListingsFromCloudSql(): Promise<PropertyListing[]> {
+export async function fetchListingsFromCloudSql(token?: string | null): Promise<PropertyListing[]> {
   try {
-    const res = await fetch('/api/listings');
+    if (!token) {
+      return [];
+    }
+
+    const res = await fetch('/api/listings', {
+      headers: getHeaders(token),
+    });
+    if (res.status === 401 || res.status === 403) {
+      return [];
+    }
     if (!res.ok) {
       console.warn(`API /api/listings returned status ${res.status}: ${res.statusText}`);
-      return loadListings();
+      return [];
     }
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      console.warn(`API returned non-JSON content type: ${contentType}, falling back to local listings.`);
-      return loadListings();
+      console.warn(`API returned non-JSON content type: ${contentType}`);
+      return [];
     }
     const json = await res.json();
     if (json && Array.isArray(json.data) && json.data.length > 0) {
       return json.data;
     }
-    return loadListings();
+    return [];
   } catch (error) {
-    console.warn('fetchListingsFromCloudSql error, serving cached listings:', error);
-    return loadListings();
+    console.warn('fetchListingsFromCloudSql error:', error);
+    return [];
   }
 }
 
