@@ -66,6 +66,7 @@ export default function App() {
         } else {
           // If database is empty, seed initial local listings to Cloud SQL
           const localListings = loadListings();
+          setListings(localListings);
           localListings.forEach((l) => {
             const { id, ...data } = l;
             createListingInCloudSql(data, token, userName, currentUser?.email || undefined).catch(() => {});
@@ -74,6 +75,8 @@ export default function App() {
       })
       .catch((err) => {
         console.warn('Could not load from Cloud SQL, using local cache:', err);
+        const localListings = loadListings();
+        setListings(localListings);
       })
       .finally(() => {
         setIsDbLoaded(true);

@@ -1,4 +1,5 @@
 import { ExtractionResult, PropertyListing, PMAlertDraft, StandardizationResult, ListingAuditEntry } from '../types';
+import { loadListings } from '../utils/storage';
 
 // Helper to build headers including Auth token and user attribution
 function getHeaders(token?: string | null, userName?: string, userEmail?: string): HeadersInit {
@@ -22,13 +23,22 @@ export async function fetchListingsFromCloudSql(): Promise<PropertyListing[]> {
   try {
     const res = await fetch('/api/listings');
     if (!res.ok) {
-      throw new Error(`Failed to fetch listings: ${res.statusText}`);
+      console.warn(`API /api/listings returned status ${res.status}: ${res.statusText}`);
+      return loadListings();
+    }
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn(`API returned non-JSON content type: ${contentType}, falling back to local listings.`);
+      return loadListings();
     }
     const json = await res.json();
-    return json.data || [];
+    if (json && Array.isArray(json.data) && json.data.length > 0) {
+      return json.data;
+    }
+    return loadListings();
   } catch (error) {
-    console.error('fetchListingsFromCloudSql error:', error);
-    throw error;
+    console.warn('fetchListingsFromCloudSql error, serving cached listings:', error);
+    return loadListings();
   }
 }
 
