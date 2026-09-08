@@ -153,6 +153,7 @@ export function autoExpireListings(
 } {
   const expiredIds: number[] = [];
   const activatedIds: number[] = [];
+  let renewalChangedCount = 0;
 
   const updatedListings = listings.map((listing) => {
     if (listing.date && listing.date.trim() !== '-' && listing.date.trim() !== '' && listing.date.trim() !== 'N/A') {
@@ -166,6 +167,9 @@ export function autoExpireListings(
           expiredIds.push(listing.id);
         } else {
           activatedIds.push(listing.id);
+        }
+        if (listing.renewStatus !== targetRenewStatus) {
+          renewalChangedCount += 1;
         }
         return {
           ...listing,
@@ -183,7 +187,7 @@ export function autoExpireListings(
     expiredIds,
     activatedCount: activatedIds.length,
     activatedIds,
-    changedCount: expiredIds.length + activatedIds.length,
+    changedCount: expiredIds.length + activatedIds.length + renewalChangedCount,
   };
 }
 

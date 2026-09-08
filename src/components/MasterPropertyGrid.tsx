@@ -193,8 +193,8 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-white overflow-hidden">
       {/* Top Lightweight Filter & Action Bar */}
-      <div className="bg-slate-50 px-4 py-2 flex flex-wrap justify-between items-center gap-2 border-b border-slate-200 shrink-0">
-        <div className="flex items-center gap-2 flex-1 max-w-xl">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 lg:max-w-4xl">
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -212,7 +212,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
             onChange={(e) =>
               onFilterChange({ projectCategory: e.target.value, category: e.target.value })
             }
-            className="text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer"
+            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
             title="Filter by Project Category"
           >
             <option value="All">All Categories</option>
@@ -227,7 +227,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
           <select
             value={filters.pm}
             onChange={(e) => onFilterChange({ pm: e.target.value })}
-            className="text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer"
+            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
           >
             <option value="All">{usesNegotiatorLabel ? 'All Negotiators / Agents' : 'All PMs'}</option>
             {uniquePMs.map((pm) => (
@@ -241,7 +241,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
           <select
             value={filters.status}
             onChange={(e) => onFilterChange({ status: e.target.value })}
-            className="text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer"
+            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
           >
             <option value="All">All Status</option>
             <option value="Active">Active</option>
@@ -252,7 +252,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
           <select
             value={filters.renewStatus}
             onChange={(e) => onFilterChange({ renewStatus: e.target.value })}
-            className="text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer"
+            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
           >
             <option value="All">All Renewals</option>
             <option value="Renewed">Renewed</option>
@@ -262,7 +262,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
         </div>
 
         {/* Count and Clear */}
-        <div className="flex items-center gap-3 text-xs text-slate-500">
+        <div className="flex w-full items-center justify-between gap-3 text-xs text-slate-500 sm:w-auto">
           <span>
             Showing <strong className="text-slate-800 font-semibold">{filteredListings.length}</strong> of{' '}
             {listings.length} rows
@@ -349,7 +349,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
 
       {/* Spreadsheet Container with Centered Header Title */}
       <div className="flex-1 overflow-auto bg-slate-50 p-4">
-        <div className="max-w-[1800px] mx-auto bg-white shadow-xs border border-slate-300 rounded-sm overflow-hidden">
+        <div className="mx-auto w-full max-w-[1800px] overflow-hidden rounded-sm border border-slate-300 bg-white shadow-xs">
           {/* Centered Tracker Title Bar exactly like the user's uploaded spreadsheet */}
           <div className="bg-white py-2.5 text-center border-b border-slate-300">
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
@@ -358,7 +358,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
           </div>
 
           {/* Master Spreadsheet Table */}
-          <table className="w-full min-w-[1700px] text-left border-collapse text-[13px]">
+          <table className="w-full min-w-[1700px] border-collapse text-left text-[13px]">
             {/* Dark Purple-Blue Header row (#434a78) */}
             <thead>
               <tr className="bg-[#434a78] text-white font-bold border-b border-slate-300 text-xs sm:text-[13px] select-none">

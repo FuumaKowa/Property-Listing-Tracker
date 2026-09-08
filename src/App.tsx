@@ -344,7 +344,7 @@ function Workspace() {
   const nextDisplayNumber = sheetListings.length + 1;
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-900 font-sans overflow-hidden">
+    <div className="flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
       {/* 1. Header Toolbar */}
       <Header
         listings={sheetListings}
@@ -400,7 +400,7 @@ function Workspace() {
       )}
 
       {/* 3. Main Workspace: Master Spreadsheet Grid & Optional AI Studio Assistant Sidebar */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {/* Master Spreadsheet Table Area */}
         <MasterPropertyGrid
           listings={sheetListings}
