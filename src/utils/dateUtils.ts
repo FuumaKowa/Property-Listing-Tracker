@@ -159,7 +159,9 @@ export function autoExpireListings(
       const isPassed = isDatePassed(listing.date, referenceDate);
       const targetStatus: 'Active' | 'Expired' = isPassed ? 'Expired' : 'Active';
 
-      if (listing.status !== targetStatus) {
+      const targetRenewStatus = isPassed ? 'Not Renewed' : listing.renewStatus;
+
+      if (listing.status !== targetStatus || listing.renewStatus !== targetRenewStatus) {
         if (targetStatus === 'Expired') {
           expiredIds.push(listing.id);
         } else {
@@ -168,6 +170,7 @@ export function autoExpireListings(
         return {
           ...listing,
           status: targetStatus,
+          renewStatus: targetRenewStatus,
         };
       }
     }
@@ -200,6 +203,7 @@ export function evaluateListingExpiry(
     return {
       ...listing,
       status: isPassed ? 'Expired' : 'Active',
+      renewStatus: isPassed ? 'Not Renewed' : listing.renewStatus,
     };
   }
   return listing;

@@ -20,16 +20,19 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
         location = COALESCE($3, location),
         tenure = COALESCE($4, tenure),
         pm = COALESCE($5, pm),
-        available_units = COALESCE($6, available_units),
-        status = COALESCE($7, status),
-        date = COALESCE($8, date),
-        renew_status = COALESCE($9, renew_status),
-        notes = COALESCE($10, notes),
-        updated_by_user_id = $11,
-        updated_by_name = $12,
+        negotiator = COALESCE($6, negotiator),
+        agent = COALESCE($7, agent),
+        no_tel = COALESCE($8, no_tel),
+        available_units = COALESCE($9, available_units),
+        status = COALESCE($10, status),
+        date = COALESCE($11, date),
+        renew_status = COALESCE($12, renew_status),
+        notes = COALESCE($13, notes),
+        updated_by_user_id = $14,
+        updated_by_name = $15,
         updated_by_email = NULL,
         last_updated_at = NOW()
-      WHERE id = $13
+      WHERE id = $16
       RETURNING ${listingColumns}
     `, [
       body.property ?? null,
@@ -37,6 +40,9 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
       body.location ?? null,
       body.tenure ?? null,
       body.pm ?? null,
+      body.negotiator ?? null,
+      body.agent ?? null,
+      body.noTel ?? null,
       body.availableUnits ?? null,
       body.status ?? null,
       body.date ?? null,

@@ -1,6 +1,6 @@
 {
   "name": "Property Listing Tracker",
-  "description": "Comprehensive real estate listing management system with AI-powered data extraction, portfolio chat assistant, automated renewal alerts, and location standardization.",
+  "description": "Property Listing Tracker with Neon-backed listings, user accounts, and renewal tracking.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": ["NEON_DATABASE", "USER_ACCOUNTS", "PROPERTY_LISTINGS"]
 }

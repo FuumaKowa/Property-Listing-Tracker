@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { PropertyListing, FilterState, ExtractionResult, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from './types';
-import { loadListings, saveListings } from './utils/storage';
+import { PropertyListing, FilterState, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from './types';
+import { saveListings } from './utils/storage';
 import { autoExpireListings, evaluateListingExpiry, isDatePassed } from './utils/dateUtils';
 import { Header } from './components/Header';
 import { KPIMetrics } from './components/KPIMetrics';
 import { MasterPropertyGrid } from './components/MasterPropertyGrid';
-import { SidebarAssistant } from './components/SidebarAssistant';
-import { AIExtractModal } from './components/Modals/AIExtractModal';
-import { PMAlertModal } from './components/Modals/PMAlertModal';
-import { StandardizeModal } from './components/Modals/StandardizeModal';
 import { ListingFormModal } from './components/Modals/ListingFormModal';
 import { AuditTrailModal } from './components/Modals/AuditTrailModal';
 import { UserManagementModal } from './components/UserManagementModal';
@@ -51,24 +47,30 @@ function Workspace() {
   });
   const [activeFilterTab, setActiveFilterTab] = useState<string>('all');
   const [showKPIMetrics, setShowKPIMetrics] = useState<boolean>(false);
-  const [showAIAssistant, setShowAIAssistant] = useState<boolean>(false);
 
   // Modal States
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
   const [editingListing, setEditingListing] = useState<PropertyListing | null>(null);
 
-  const [isExtractOpen, setIsExtractOpen] = useState(false);
-  const [extractInitialText, setExtractInitialText] = useState('');
-
-  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
-  const [alertListing, setAlertListing] = useState<PropertyListing | null>(null);
-
-  const [isStandardizeOpen, setIsStandardizeOpen] = useState(false);
-
   // Audit trail modal state
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [auditListingTarget, setAuditListingTarget] = useState<{ id?: number; property?: string }>({});
+
+  const persistExpiryChanges = useCallback(async (before: PropertyListing[], after: PropertyListing[]) => {
+    await Promise.all(
+      after
+        .filter((listing) => {
+          const previous = before.find((item) => item.id === listing.id);
+          return previous && (previous.status !== listing.status || previous.renewStatus !== listing.renewStatus);
+        })
+        .map((listing) => updateListingInCloudSql(listing.id, {
+          status: listing.status,
+          renewStatus: listing.renewStatus,
+          updatedByName: userName,
+        }, token, userName, undefined).catch((error) => console.warn('Expiry sync warning:', error)))
+    );
+  }, [token, userName]);
 
   const refreshListings = useCallback(async () => {
     setIsDbLoaded(false);
@@ -76,6 +78,7 @@ function Workspace() {
     try {
       const dbListings = await fetchListingsFromCloudSql();
       const { updatedListings } = autoExpireListings(dbListings || []);
+      await persistExpiryChanges(dbListings || [], updatedListings);
       setListings(updatedListings);
       saveListings(updatedListings);
     } catch (err) {
@@ -84,7 +87,7 @@ function Workspace() {
       setIsDbLoaded(true);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [persistExpiryChanges]);
 
   // Initial load from Cloud SQL
   useEffect(() => {
@@ -97,6 +100,7 @@ function Workspace() {
       setListings((prev) => {
         const { updatedListings, changedCount } = autoExpireListings(prev);
         if (changedCount > 0) {
+          void persistExpiryChanges(prev, updatedListings);
           return updatedListings;
         }
         return prev;
@@ -106,7 +110,7 @@ function Workspace() {
     checkDateSync();
     const interval = setInterval(checkDateSync, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [persistExpiryChanges]);
 
   // Sync to local storage on changes
   useEffect(() => {
@@ -322,27 +326,6 @@ function Workspace() {
     }
   };
 
-  const handleDraftPMAlert = (listing: PropertyListing) => {
-    setAlertListing(listing);
-    setIsAlertModalOpen(true);
-  };
-
-  const handleMarkRenewedFromAlert = (listingId: number) => {
-    setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === listingId) {
-          const datePassed = isDatePassed(l.date);
-          return {
-            ...l,
-            renewStatus: 'Renewed',
-            status: datePassed ? 'Expired' : 'Active',
-          };
-        }
-        return l;
-      })
-    );
-  };
-
   // Batch operations
   const handleBatchUpdate = (ids: number[], updates: Partial<PropertyListing>) => {
     setListings((prev) => {
@@ -356,44 +339,6 @@ function Workspace() {
     setListings((prev) => prev.filter((l) => !ids.includes(l.id)));
   };
 
-  // Add extracted listings from AI modal with auto-expiry check
-  const handleAddExtractedListings = (extracted: ExtractionResult[]) => {
-    let nextId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
-    const rawListings: PropertyListing[] = extracted.map((e) => ({
-      id: nextId++,
-      property: e.property,
-      projectCategory: e.projectCategory || 'Project Marketing (PM)',
-      location: e.location,
-      tenure: e.tenure,
-      pm: e.pm,
-      availableUnits: e.availableUnits,
-      status: e.status,
-      date: e.date,
-      renewStatus: e.renewStatus,
-      notes: e.confidenceNotes,
-    }));
-    const { updatedListings } = autoExpireListings(rawListings);
-    setListings((prev) => [...prev, ...updatedListings]);
-  };
-
-  // Apply Standardization changes
-  const handleApplyStandardization = (
-    updates: { id: number; location: string; tenure: string }[]
-  ) => {
-    setListings((prev) =>
-      prev.map((l) => {
-        const update = updates.find((u) => u.id === l.id);
-        if (update) {
-          return {
-            ...l,
-            location: update.location,
-            tenure: update.tenure,
-          };
-        }
-        return l;
-      })
-    );
-  };
 
   const nextAvailableId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
   const nextDisplayNumber = sheetListings.length + 1;
@@ -404,18 +349,11 @@ function Workspace() {
       <Header
         listings={sheetListings}
         showKPIMetrics={showKPIMetrics}
-        showAIAssistant={showAIAssistant}
         onToggleKPIMetrics={() => setShowKPIMetrics((prev) => !prev)}
-        onToggleAIAssistant={() => setShowAIAssistant((prev) => !prev)}
         onOpenAddModal={() => {
           setEditingListing(null);
           setIsAddEditOpen(true);
         }}
-        onOpenExtractModal={() => {
-          setExtractInitialText('');
-          setIsExtractOpen(true);
-        }}
-        onOpenStandardizeModal={() => setIsStandardizeOpen(true)}
         onOpenAuditModal={() => {
           setAuditListingTarget({});
           setIsAuditModalOpen(true);
@@ -476,7 +414,6 @@ function Workspace() {
           onToggleRenewStatus={handleToggleRenewStatus}
           onToggleStatus={handleToggleStatus}
           onUpdateField={handleUpdateField}
-          onDraftPMAlert={handleDraftPMAlert}
           onBatchUpdate={handleBatchUpdate}
           onBatchDelete={handleBatchDelete}
           onOpenAuditLog={(id, property) => {
@@ -486,25 +423,6 @@ function Workspace() {
           sheetCategory={activeSheet}
         />
 
-        {/* AI Studio Assistant Sidebar (Collapsible) */}
-        {showAIAssistant && (
-          <SidebarAssistant
-            listings={sheetListings}
-            onDraftPMAlert={handleDraftPMAlert}
-            onOpenExtractModal={(initText) => {
-              setExtractInitialText(initText || '');
-              setIsExtractOpen(true);
-            }}
-            onFilterByPM={(pmName) => {
-              setFilters((prev) => ({ ...prev, pm: pmName }));
-              setActiveFilterTab('custom');
-            }}
-            onFilterByStatus={(statusName) => {
-              setFilters((prev) => ({ ...prev, status: statusName }));
-              setActiveFilterTab('custom');
-            }}
-          />
-        )}
       </main>
 
       {/* MODALS */}
@@ -517,30 +435,6 @@ function Workspace() {
         nextId={nextAvailableId}
         displayNumber={nextDisplayNumber}
         defaultProjectCategory={activeSheet === 'All' ? 'Project Marketing (PM)' : activeSheet}
-      />
-
-      {/* 2. AI Structured Extraction Modal (Text-to-Table) */}
-      <AIExtractModal
-        isOpen={isExtractOpen}
-        initialText={extractInitialText}
-        onClose={() => setIsExtractOpen(false)}
-        onAddExtractedListings={handleAddExtractedListings}
-      />
-
-      {/* 3. PM Renewal Notice Generator Modal */}
-      <PMAlertModal
-        isOpen={isAlertModalOpen}
-        listing={alertListing}
-        onClose={() => setIsAlertModalOpen(false)}
-        onMarkRenewed={handleMarkRenewedFromAlert}
-      />
-
-      {/* 4. Location & Tenure Standardization Modal */}
-      <StandardizeModal
-        isOpen={isStandardizeOpen}
-        listings={listings}
-        onClose={() => setIsStandardizeOpen(false)}
-        onApplyStandardization={handleApplyStandardization}
       />
 
       {/* 5. Cloud SQL Audit Trail History Modal */}

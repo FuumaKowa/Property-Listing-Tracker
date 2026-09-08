@@ -26,6 +26,9 @@ export interface PropertyListing {
   location: string;
   tenure: TenureType;
   pm: string;
+  negotiator?: string;
+  agent?: string;
+  noTel?: string;
   availableUnits: string;
   status: ListingStatus;
   date: string;
@@ -48,55 +51,6 @@ export interface ListingAuditEntry {
   userEmail?: string;
   userUid?: string;
   timestamp: string;
-}
-
-export interface ExtractionResult {
-  property: string;
-  projectCategory?: ProjectCategory;
-  location: string;
-  tenure: string;
-  pm: string;
-  availableUnits: string;
-  status: ListingStatus;
-  date: string;
-  renewStatus: RenewStatus;
-  confidenceNotes?: string;
-}
-
-export interface StandardizationResult {
-  id: number;
-  originalLocation: string;
-  standardizedLocation: string;
-  originalTenure: string;
-  standardizedTenure: string;
-  suggestedChanges: string[];
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: string;
-  sources?: string[];
-  suggestedActions?: {
-    label: string;
-    actionType: 'filter_pm' | 'filter_status' | 'filter_location' | 'inspect_id';
-    value: string | number;
-  }[];
-}
-
-export interface PMAlertDraft {
-  id: string;
-  listingId: number;
-  propertyName: string;
-  pm: string;
-  location: string;
-  daysExpiredOrDate: string;
-  urgency: 'High' | 'Medium' | 'Low';
-  emailSubject: string;
-  emailBody: string;
-  whatsappMessage: string;
-  slackMessage: string;
 }
 
 export interface FilterState {

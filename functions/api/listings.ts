@@ -25,10 +25,10 @@ export const onRequestPost = async ({ env, request }: { env: AuthEnv; request: R
     const db = getDb(env);
     const rows = await db.query(`
       INSERT INTO listings (
-        property, project_category, location, tenure, pm, available_units,
+        property, project_category, location, tenure, pm, negotiator, agent, no_tel, available_units,
         status, date, renew_status, notes, updated_by_user_id, updated_by_name, updated_by_email, last_updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()
       )
       RETURNING ${listingColumns}
     `, [
@@ -37,6 +37,9 @@ export const onRequestPost = async ({ env, request }: { env: AuthEnv; request: R
       body.location,
       body.tenure || '-',
       body.pm || '-',
+      body.negotiator || null,
+      body.agent || null,
+      body.noTel || null,
       body.availableUnits || '-',
       body.status || 'Active',
       body.date || '',

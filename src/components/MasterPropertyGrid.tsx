@@ -45,7 +45,6 @@ interface MasterPropertyGridProps {
   onToggleRenewStatus: (id: number) => void;
   onToggleStatus?: (id: number) => void;
   onUpdateField?: (id: number, field: keyof PropertyListing, value: string) => void;
-  onDraftPMAlert: (listing: PropertyListing) => void;
   onBatchUpdate: (ids: number[], updates: Partial<PropertyListing>) => void;
   onBatchDelete: (ids: number[]) => void;
   onOpenAuditLog?: (listingId: number, propertyName: string) => void;
@@ -61,7 +60,6 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
   onToggleRenewStatus,
   onToggleStatus,
   onUpdateField,
-  onDraftPMAlert,
   onBatchUpdate,
   onBatchDelete,
   onOpenAuditLog,
@@ -406,12 +404,20 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                 >
                   Tenure
                 </th>
-                <th
-                  onClick={() => handleSort('pm')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]"
-                >
-                  {peopleColumnLabel}
-                </th>
+                {usesNegotiatorLabel ? (
+                  <>
+                    <th className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]">Negotiator</th>
+                    <th className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]">Agent</th>
+                    <th className="border border-slate-400/50 px-3 py-2 min-w-[140px] cursor-pointer hover:bg-[#383e66]">No Tel</th>
+                  </>
+                ) : (
+                  <th
+                    onClick={() => handleSort('pm')}
+                    className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]"
+                  >
+                    {peopleColumnLabel}
+                  </th>
+                )}
                 <th
                   onClick={() => handleSort('availableUnits')}
                   className="border border-slate-400/50 px-3 py-2 min-w-[130px] cursor-pointer hover:bg-[#383e66]"
@@ -453,7 +459,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
             <tbody className="divide-y divide-slate-300 text-slate-900">
               {filteredListings.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="border border-slate-300 px-4 py-8 text-center text-slate-500">
+                  <td colSpan={usesNegotiatorLabel ? 15 : 13} className="border border-slate-300 px-4 py-8 text-center text-slate-500">
                     No listings match the current filters.
                   </td>
                 </tr>
@@ -605,26 +611,51 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
                         )}
                       </td>
 
-                      {/* PM */}
-                      <td
-                        onDoubleClick={() => startEdit(item.id, 'pm', item.pm)}
-                        className="border border-slate-300 px-3 py-1.5 text-slate-800"
-                        title="Double-click to edit inline"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'pm' ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={saveEdit}
-                            onKeyDown={handleKeyDown}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                          />
-                        ) : (
-                          item.pm
-                        )}
-                      </td>
+                      {/* PM or Rental/Subsale CoA contacts */}
+                      {usesNegotiatorLabel ? (
+                        ([
+                          ['negotiator', item.negotiator || '-'],
+                          ['agent', item.agent || '-'],
+                          ['noTel', item.noTel || '-'],
+                        ] as [keyof PropertyListing, string][]).map(([field, value]) => (
+                          <td
+                            key={field}
+                            onDoubleClick={() => startEdit(item.id, field, value)}
+                            className="border border-slate-300 px-3 py-1.5 text-slate-800"
+                            title="Double-click to edit inline"
+                          >
+                            {editingCell?.id === item.id && editingCell?.field === field ? (
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={saveEdit}
+                                onKeyDown={handleKeyDown}
+                                className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
+                              />
+                            ) : value}
+                          </td>
+                        ))
+                      ) : (
+                        <td
+                          onDoubleClick={() => startEdit(item.id, 'pm', item.pm)}
+                          className="border border-slate-300 px-3 py-1.5 text-slate-800"
+                          title="Double-click to edit inline"
+                        >
+                          {editingCell?.id === item.id && editingCell?.field === 'pm' ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={saveEdit}
+                              onKeyDown={handleKeyDown}
+                              className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
+                            />
+                          ) : item.pm}
+                        </td>
+                      )}
 
                       {/* Available Units */}
                       <td

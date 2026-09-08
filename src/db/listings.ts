@@ -106,6 +106,9 @@ export async function createListingInDb(
     location: string;
     tenure: string;
     pm: string;
+    negotiator?: string;
+    agent?: string;
+    noTel?: string;
     availableUnits: string;
     status: string;
     date: string;
@@ -124,6 +127,9 @@ export async function createListingInDb(
         location: data.location,
         tenure: data.tenure || '-',
         pm: data.pm || '-',
+        negotiator: data.negotiator || null,
+        agent: data.agent || null,
+        noTel: data.noTel || null,
         availableUnits: data.availableUnits || '-',
         status: data.status || 'Active',
         date: data.date || '',
@@ -168,6 +174,9 @@ export async function updateListingInDb(
     location?: string;
     tenure?: string;
     pm?: string;
+    negotiator?: string;
+    agent?: string;
+    noTel?: string;
     availableUnits?: string;
     status?: string;
     date?: string;

@@ -192,19 +192,27 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
               />
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                <User className="w-3 h-3 text-slate-400" />
-                {usesNegotiatorLabel ? 'Negotiator / Agent / No Tel' : 'Assigned PM / Team'}
-              </label>
-              <input
-                type="text"
-                value={formData.pm || ''}
-                onChange={(e) => setFormData({ ...formData, pm: e.target.value })}
-                placeholder={usesNegotiatorLabel ? 'e.g. Negotiator / Agent / 012-3456789' : 'e.g. Benik or Akram/Benik/Fb'}
-                className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 text-indigo-700 font-medium"
-              />
-            </div>
+            {usesNegotiatorLabel ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1"><User className="w-3 h-3 text-slate-400" />Negotiator</label>
+                  <input type="text" value={formData.negotiator || ''} onChange={(e) => setFormData({ ...formData, negotiator: e.target.value })} placeholder="Negotiator" className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 text-indigo-700 font-medium" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-700">Agent</label>
+                  <input type="text" value={formData.agent || ''} onChange={(e) => setFormData({ ...formData, agent: e.target.value })} placeholder="Agent" className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 text-indigo-700 font-medium" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-700">No Tel</label>
+                  <input type="text" value={formData.noTel || ''} onChange={(e) => setFormData({ ...formData, noTel: e.target.value })} placeholder="Phone number" className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 text-indigo-700 font-medium" />
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1"><User className="w-3 h-3 text-slate-400" />Assigned PM / Team</label>
+                <input type="text" value={formData.pm || ''} onChange={(e) => setFormData({ ...formData, pm: e.target.value })} placeholder="e.g. Benik or Akram/Benik/Fb" className="text-xs p-2 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 text-indigo-700 font-medium" />
+              </div>
+            )}
           </div>
 
           {/* Tenure & Available Units */}
