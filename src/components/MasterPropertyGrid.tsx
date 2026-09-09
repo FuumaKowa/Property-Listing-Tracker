@@ -191,11 +191,11 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-hidden">
+    <div className="min-w-0 flex-1 flex flex-col bg-white md:overflow-hidden">
       {/* Top Lightweight Filter & Action Bar */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
-        <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 lg:max-w-4xl">
-          <div className="relative flex-1">
+        <div className="grid min-w-0 w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:flex-1 xl:flex-wrap xl:items-center">
+          <div className="relative min-w-0 sm:col-span-2 xl:flex-1 xl:min-w-64">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -296,9 +296,9 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
 
       {/* Batch Operations Bar */}
       {selectedIds.length > 0 && (
-        <div className="bg-[#3c437a] text-white px-4 py-1.5 flex items-center justify-between text-xs shrink-0">
+        <div className="bg-[#3c437a] text-white px-4 py-1.5 flex flex-wrap gap-2 items-center justify-between text-xs shrink-0">
           <span className="font-semibold">{selectedIds.length} rows selected</span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 onBatchUpdate(selectedIds, { renewStatus: 'Renewed', status: 'Active' });
@@ -347,9 +347,70 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
         </div>
       )}
 
+      {/* Phones use cards so every field and action is reachable without sideways scrolling. */}
+      <section className="space-y-3 bg-slate-50 p-3 md:hidden" aria-label="Property listings">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <label className="flex items-center gap-2 min-h-11">
+            <input type="checkbox" checked={filteredListings.length > 0 && filteredListings.every(item => selectedIds.includes(item.id))} onChange={handleSelectAll} />
+            Select all
+          </label>
+          <div className="flex min-w-0 items-center gap-2">
+            <select aria-label="Sort listings" value={filters.sortBy} onChange={event => onFilterChange({ sortBy: event.target.value as keyof PropertyListing })} className="min-w-0 rounded border border-slate-300 bg-white px-2">
+              <option value="id">Number</option>
+              <option value="property">Property</option>
+              <option value="projectCategory">Category</option>
+              <option value="location">Location</option>
+              <option value="tenure">Tenure</option>
+              <option value="pm">PM</option>
+              <option value="status">Status</option>
+              <option value="date">Date</option>
+              <option value="renewStatus">Renewal</option>
+            </select>
+            <button className="rounded border border-slate-300 bg-white px-3" onClick={() => onFilterChange({ sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' })} aria-label={`Sort ${filters.sortOrder === 'asc' ? 'descending' : 'ascending'}`}>
+              {filters.sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+        </div>
+        {filteredListings.length === 0 && <p className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No listings match your filters.</p>}
+        {filteredListings.map((item, index) => (
+          <article key={item.id} className="min-w-0 space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="flex items-start gap-3">
+              <label className="flex min-h-11 shrink-0 items-center gap-2 text-xs text-slate-500">
+                <input type="checkbox" aria-label={`Select ${item.property}`} checked={selectedIds.includes(item.id)} onChange={() => handleToggleSelect(item.id)} />
+                {index + 1}
+              </label>
+              <div className="min-w-0 flex-1">
+                <h2 className="break-words font-semibold text-slate-900">{item.property}</h2>
+                <p className="break-words text-sm text-slate-500">{item.location || '-'}</p>
+              </div>
+            </div>
+            <p className={`w-fit max-w-full rounded border px-2 py-1 text-xs ${getCategoryBadgeStyle(item.projectCategory)}`}>{item.projectCategory || 'Project Marketing (PM)'}</p>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              {([
+                ['Tenure', item.tenure], ['Available units', item.availableUnits],
+                ...(usesNegotiatorLabel ? [['Negotiator', item.negotiator], ['Agent', item.agent], ['Phone', item.noTel]] : [['PM', item.pm]]),
+                ['Status', item.status], ['Date', item.date], ['Renewal', item.renewStatus],
+                ['Updated by', item.updatedByName || 'Team Member'],
+                ['Last updated', item.lastUpdatedAt ? new Date(item.lastUpdatedAt).toLocaleString() : 'Initial'],
+              ]).map(([label, value]) => (
+                <div key={label} className="min-w-0">
+                  <dt className="text-xs text-slate-500">{label}</dt>
+                  <dd className="break-words text-slate-800">{value || '-'}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+              <button onClick={() => onEditListing(item)} className="rounded bg-indigo-50 px-3 text-sm font-semibold text-indigo-700">Edit listing</button>
+              {onOpenAuditLog && <button onClick={() => onOpenAuditLog(item.id, item.property)} className="rounded bg-slate-100 px-3 text-sm text-slate-700">History</button>}
+              <button onClick={() => onDeleteListing(item.id)} className="rounded px-3 text-sm text-rose-700">Delete</button>
+            </div>
+          </article>
+        ))}
+      </section>
+
       {/* Spreadsheet Container with Centered Header Title */}
-      <div className="flex-1 overflow-auto bg-slate-50 p-4">
-        <div className="mx-auto w-full max-w-[1800px] overflow-hidden rounded-sm border border-slate-300 bg-white shadow-xs">
+      <div className="hidden min-h-0 min-w-0 flex-1 overflow-auto bg-slate-50 p-3 md:block md:p-4">
+        <div className="mx-auto w-full max-w-[1800px] rounded-sm border border-slate-300 bg-white shadow-xs">
           {/* Centered Tracker Title Bar exactly like the user's uploaded spreadsheet */}
           <div className="bg-white py-2.5 text-center border-b border-slate-300">
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
@@ -358,6 +419,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
           </div>
 
           {/* Master Spreadsheet Table */}
+          <div className="overflow-x-auto" role="region" aria-label="Property listings spreadsheet" tabIndex={0}>
           <table className="w-full min-w-[1700px] border-collapse text-left text-[13px]">
             {/* Dark Purple-Blue Header row (#434a78) */}
             <thead>
@@ -878,6 +940,7 @@ export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

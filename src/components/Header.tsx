@@ -75,13 +75,13 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <header className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-2xs xl:flex-row xl:items-center xl:justify-between sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="w-8 h-8 bg-[#434a78] rounded flex items-center justify-center shadow-xs">
+        <div className="w-8 h-8 shrink-0 bg-[#434a78] rounded flex items-center justify-center shadow-xs">
           <Building2 className="w-4.5 h-4.5 text-white" />
         </div>
-        <div>
-          <div className="flex items-center gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate text-sm font-bold leading-tight tracking-tight text-slate-900 sm:text-base">
               Property Listing Tracker
             </h1>
@@ -100,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
           title="Create a new property listing entry"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span className="hidden xs:inline">+ Add Row</span>
+          <span>Add Row</span>
         </button>
 
         {/* CSV and Data Tools */}

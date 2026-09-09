@@ -61,9 +61,9 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+      <div className="modal-panel bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
               <History className="w-5 h-5" />
@@ -88,7 +88,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
         </div>
 
         {/* Content list */}
-        <div className="p-6 overflow-y-auto flex-1 divide-y divide-slate-100">
+        <div className="p-4 sm:p-6 min-h-0 overflow-y-auto flex-1 divide-y divide-slate-100">
           {loading ? (
             <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -104,7 +104,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
             </div>
           ) : (
             logs.map((log) => (
-              <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex items-start justify-between gap-4">
+              <div key={log.id} className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
                     {log.action === 'create' ? (
@@ -114,7 +114,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
                     )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
                         <User className="w-3 h-3 text-slate-400" />
                         {log.userName || 'Anonymous User'}
@@ -152,7 +152,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div className="px-4 sm:px-6 py-3 shrink-0 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
             Synchronized with Cloud SQL PostgreSQL

@@ -81,8 +81,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <div className="modal-panel w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-4 shrink-0">
           <div>
             <h2 className="text-base font-bold text-slate-900">Manage users</h2>
             <p className="text-xs text-slate-500">Create accounts and assign their workspace role.</p>
@@ -91,7 +91,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="grid gap-6 p-6 md:grid-cols-[1fr_1.2fr]">
+        <div className="grid min-w-0 gap-6 p-4 sm:p-6 md:grid-cols-[1fr_1.2fr]">
           <form onSubmit={createUser} className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-800">{editingUser ? 'Edit account' : 'Create account'}</h3>
