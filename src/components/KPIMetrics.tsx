@@ -28,7 +28,7 @@ export const KPIMetrics: React.FC<KPIMetricsProps> = ({
     total > 0 ? ((renewedListings.length / total) * 100).toFixed(1) : '0.0';
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 bg-white border-b border-slate-200 divide-x divide-slate-100 shrink-0">
+    <div className="grid grid-flow-col auto-cols-[180px] overflow-x-auto xl:grid-flow-row xl:auto-cols-auto xl:grid-cols-5 bg-white border-b border-slate-200 divide-x divide-slate-100 shrink-0">
       {/* 1. Total Listings */}
       <button
         onClick={() => onFilterChange('all')}

@@ -113,9 +113,9 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="modal-panel bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-4 shrink-0 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
               <Building2 className="w-4.5 h-4.5" />
@@ -140,7 +140,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[70vh]">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 min-h-0 flex flex-col gap-4 overflow-y-auto">
           {/* Property Name & Project Category */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2 flex flex-col gap-1">
@@ -351,7 +351,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-200 mt-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200 mt-2">
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
               <span>
@@ -359,7 +359,7 @@ export const ListingFormModal: React.FC<ListingFormModalProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
