@@ -85,6 +85,7 @@ export const ownerListings = pgTable('owner_listings', {
   ownerName: text('owner_name').notNull(),
   noTel: text('no_tel').notNull(),
   propertyName: text('property_name').notNull(),
+  propertyLink: text('property_link').notNull().default(''),
   propertyType: text('property_type').notNull(),
   propertyPrice: numeric('property_price', { precision: 18, scale: 2 }).notNull(),
   status: text('status').notNull().default('Unlisted'),
