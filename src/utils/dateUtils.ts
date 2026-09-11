@@ -153,32 +153,17 @@ export function autoExpireListings(
 } {
   const expiredIds: number[] = [];
   const activatedIds: number[] = [];
-  let renewalChangedCount = 0;
+  let changedCount = 0;
 
   const updatedListings = listings.map((listing) => {
-    if (listing.date && listing.date.trim() !== '-' && listing.date.trim() !== '' && listing.date.trim() !== 'N/A') {
-      const isPassed = isDatePassed(listing.date, referenceDate);
-      const targetStatus: 'Active' | 'Expired' = isPassed ? 'Expired' : 'Active';
-
-      const targetRenewStatus = isPassed ? 'Not Renewed' : listing.renewStatus;
-
-      if (listing.status !== targetStatus || listing.renewStatus !== targetRenewStatus) {
-        if (targetStatus === 'Expired') {
-          expiredIds.push(listing.id);
-        } else {
-          activatedIds.push(listing.id);
-        }
-        if (listing.renewStatus !== targetRenewStatus) {
-          renewalChangedCount += 1;
-        }
-        return {
-          ...listing,
-          status: targetStatus,
-          renewStatus: targetRenewStatus,
-        };
-      }
+    const updated = evaluateListingExpiry(listing, referenceDate);
+    if (updated === listing) return listing;
+    changedCount += 1;
+    if (listing.status !== updated.status) {
+      if (updated.status === 'Expired') expiredIds.push(listing.id);
+      else activatedIds.push(listing.id);
     }
-    return listing;
+    return updated;
   });
 
   return {
@@ -187,7 +172,7 @@ export function autoExpireListings(
     expiredIds,
     activatedCount: activatedIds.length,
     activatedIds,
-    changedCount: expiredIds.length + activatedIds.length + renewalChangedCount,
+    changedCount,
   };
 }
 
@@ -202,13 +187,12 @@ export function evaluateListingExpiry(
   listing: PropertyListing,
   referenceDate: Date = new Date()
 ): PropertyListing {
-  if (listing.date && listing.date.trim() !== '-' && listing.date.trim() !== '' && listing.date.trim() !== 'N/A') {
-    const isPassed = isDatePassed(listing.date, referenceDate);
-    return {
-      ...listing,
-      status: isPassed ? 'Expired' : 'Active',
-      renewStatus: isPassed ? 'Not Renewed' : listing.renewStatus,
-    };
-  }
-  return listing;
+  const date = parseListingDate(listing.date, referenceDate);
+  if (!date) return listing;
+  const isPassed = referenceDate.getTime() > date.getTime();
+  const status = isPassed ? 'Expired' : 'Active';
+  // Expiry invalidates a completed renewal, but must preserve pending renewal intent.
+  const renewStatus = isPassed && listing.renewStatus === 'Renewed' ? 'Not Renewed' : listing.renewStatus;
+  if (listing.status === status && listing.renewStatus === renewStatus) return listing;
+  return { ...listing, status, renewStatus };
 }

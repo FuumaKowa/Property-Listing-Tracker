@@ -15,6 +15,7 @@ import { exportToCSV, parseCSVToListings, resetListings } from '../utils/storage
 import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
+  ownerMode?: boolean;
   listings: PropertyListing[];
   showKPIMetrics: boolean;
   onToggleKPIMetrics: () => void;
@@ -28,6 +29,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   listings,
+  ownerMode = false,
   showKPIMetrics,
   onToggleKPIMetrics,
   onOpenAddModal,
@@ -73,6 +75,16 @@ export const Header: React.FC<HeaderProps> = ({
       onListingsUpdated(initial);
     }
   };
+
+  if (ownerMode) return (
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-6">
+      <h1 className="text-sm font-bold">Property Listing Tracker</h1>
+      <div className="flex items-center gap-2 text-sm">
+        {user?.role === 'super_admin' && <button className="rounded px-3 py-2 hover:bg-slate-100" onClick={onOpenUserManagement}>Users</button>}
+        <button className="rounded px-3 py-2 hover:bg-slate-100" onClick={logout}>Sign out</button>
+      </div>
+    </header>
+  );
 
   return (
     <header className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-2xs xl:flex-row xl:items-center xl:justify-between sm:px-6">

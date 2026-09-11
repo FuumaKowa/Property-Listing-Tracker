@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { PropertyListing, FilterState, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from './types';
 import { saveListings } from './utils/storage';
 import { autoExpireListings, evaluateListingExpiry, isDatePassed } from './utils/dateUtils';
+import { OWNER_SHEET } from './ownerListing';
+import { OwnerListingSheet } from './components/OwnerListingSheet';
 import { Header } from './components/Header';
 import { KPIMetrics } from './components/KPIMetrics';
 import { MasterPropertyGrid } from './components/MasterPropertyGrid';
@@ -32,7 +34,11 @@ function Workspace() {
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All'>('Project Marketing (PM)');
+  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All' | typeof OWNER_SHEET>('Project Marketing (PM)');
+  const sheetNavigation = useRef<HTMLElement>(null);
+  useEffect(() => {
+    sheetNavigation.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeSheet]);
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
     projectCategory: 'All',
@@ -143,7 +149,7 @@ function Workspace() {
     return listings.filter((listing) => (listing.projectCategory || 'Project Marketing (PM)') === activeSheet);
   }, [activeSheet, listings]);
 
-  const handleSheetChange = (sheet: ProjectCategory | 'All') => {
+  const handleSheetChange = (sheet: ProjectCategory | 'All' | typeof OWNER_SHEET) => {
     setActiveSheet(sheet);
     setFilters((prev) => ({ ...prev, projectCategory: 'All', category: 'All' }));
     setActiveFilterTab('all');
@@ -347,6 +353,7 @@ function Workspace() {
     <div className="flex min-h-[100dvh] w-full min-w-0 flex-col md:h-[100dvh] md:overflow-hidden bg-slate-100 font-sans text-slate-900">
       {/* 1. Header Toolbar */}
       <Header
+        ownerMode={activeSheet === OWNER_SHEET}
         listings={sheetListings}
         showKPIMetrics={showKPIMetrics}
         onToggleKPIMetrics={() => setShowKPIMetrics((prev) => !prev)}
@@ -364,9 +371,10 @@ function Workspace() {
         onListingsUpdated={(newListings) => setListings(newListings)}
       />
 
-      <nav className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-slate-300 bg-slate-200 px-4 pt-2" aria-label="Listing sheets">
+      <nav ref={sheetNavigation} className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-slate-300 bg-slate-200 px-4 pt-2" aria-label="Listing sheets">
         <button
           onClick={() => handleSheetChange('All')}
+          aria-current={activeSheet === 'All' ? 'page' : undefined}
           className={`shrink-0 whitespace-nowrap rounded-t-md border border-b-0 px-4 py-2 text-xs font-semibold transition-colors ${
             activeSheet === 'All'
               ? 'border-slate-300 bg-white text-indigo-700'
@@ -375,10 +383,11 @@ function Workspace() {
         >
           All Listings
         </button>
-        {PROJECT_CATEGORIES.map((category) => (
+        {[...PROJECT_CATEGORIES, OWNER_SHEET].map((category) => (
           <button
             key={category}
             onClick={() => handleSheetChange(category)}
+            aria-current={activeSheet === category ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap rounded-t-md border border-b-0 px-4 py-2 text-xs font-semibold transition-colors ${
               activeSheet === category
                 ? 'border-slate-300 bg-white text-indigo-700'
@@ -391,7 +400,7 @@ function Workspace() {
       </nav>
 
       {/* 2. Optional Top KPI Metric Highlights */}
-      {showKPIMetrics && (
+      {showKPIMetrics && activeSheet !== OWNER_SHEET && (
         <KPIMetrics
           listings={sheetListings}
           onFilterChange={handleKPITabChange}
@@ -402,7 +411,7 @@ function Workspace() {
       {/* 3. Main Workspace: Master Spreadsheet Grid & Optional AI Studio Assistant Sidebar */}
       <main className="flex min-h-0 min-w-0 flex-1 md:overflow-hidden">
         {/* Master Spreadsheet Table Area */}
-        <MasterPropertyGrid
+        {activeSheet === OWNER_SHEET ? <OwnerListingSheet /> : <MasterPropertyGrid
           listings={sheetListings}
           filters={filters}
           onFilterChange={handleFilterChange}
@@ -421,7 +430,7 @@ function Workspace() {
             setIsAuditModalOpen(true);
           }}
           sheetCategory={activeSheet}
-        />
+        />}
 
       </main>
 
@@ -434,7 +443,7 @@ function Workspace() {
         onSave={handleSaveListing}
         nextId={nextAvailableId}
         displayNumber={nextDisplayNumber}
-        defaultProjectCategory={activeSheet === 'All' ? 'Project Marketing (PM)' : activeSheet}
+        defaultProjectCategory={activeSheet === 'All' || activeSheet === OWNER_SHEET ? 'Project Marketing (PM)' : activeSheet}
       />
 
       {/* 5. Cloud SQL Audit Trail History Modal */}

@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,6 +10,8 @@ import {
   deleteListingFromDb,
   getAuditLogs,
 } from './src/db/listings.ts';
+
+import { handleOwnerListings } from './functions/api/_owner-listings.ts';
 
 dotenv.config();
 
@@ -70,6 +72,20 @@ app.get('/api/audit-logs', async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to load audit logs' });
   }
+});
+
+// Use the same authenticated owner API in local/Node and Cloudflare deployments.
+app.all(['/api/owner-listings', '/api/owner-listings/:id'], async (req: Request, res: Response) => {
+  const request = new Request(`http://localhost${req.originalUrl}`, {
+    method: req.method,
+    headers: { 'Content-Type': 'application/json', Cookie: req.headers.cookie || '' },
+    body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
+  });
+  const response = await handleOwnerListings({
+    env: { DATABASE_URL: process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '' },
+    request, params: req.params.id ? { id: req.params.id } : undefined,
+  });
+  res.status(response.status).type('application/json').send(await response.text());
 });
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
