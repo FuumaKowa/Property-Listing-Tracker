@@ -1,16 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, RefreshCw, X } from 'lucide-react';
-import { OwnerListing, OwnerListingInput, OWNER_PROPERTY_TYPES, OWNER_STATUSES, OWNER_SHEET, validateOwnerListing } from '../ownerListing';
+import { OwnerListing, OwnerListingInput, OWNER_PROPERTY_TYPES, OWNER_STATUSES, OWNER_SHEET, safePropertyLink, validateOwnerListing } from '../ownerListing';
 import { fetchOwnerListings, saveOwnerListing, deleteOwnerListing } from '../services/ownerListings';
 
 const control = 'min-w-0 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50';
 const button = 'rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium disabled:opacity-50';
-const blank: OwnerListingInput = { ownerName: '', noTel: '', propertyName: '', propertyType: 'landed', propertyPrice: '', status: 'Unlisted' };
+const blank: OwnerListingInput = { ownerName: '', noTel: '', propertyName: '', propertyLink: '', propertyType: 'landed', propertyPrice: '', status: 'Unlisted' };
 const message = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 const formatPrice = (price: string) => {
   const [whole, fraction = '00'] = price.split('.');
   return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction.padEnd(2, '0')}`;
 };
+
+function PropertyPostLink({ row }: { row: OwnerListing }) {
+  const href = safePropertyLink(row.propertyLink);
+  return href ? <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Open original post for ${row.propertyName} (opens in a new tab)`}
+    className="inline-flex min-h-11 items-center text-sm font-medium text-indigo-700 underline hover:text-indigo-900">Open original post</a> : <span className="text-slate-400">—</span>;
+}
 
 export function OwnerListingSheet() {
   const [rows, setRows] = useState<OwnerListing[]>([]);
@@ -119,7 +125,7 @@ export function OwnerListingSheet() {
         <div className="hidden overflow-x-auto rounded border border-slate-300 bg-white md:block" role="region" aria-label="Owner listings spreadsheet" tabIndex={0}>
           <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
             <thead className="bg-[#434a78] text-white"><tr>
-              {['No', 'Owner_name', 'no_tel', 'Property_name', 'property_type', 'Property_price', 'Status', 'Actions'].map(label => <th key={label} scope="col" className="border border-slate-300/40 px-3 py-3">{label}</th>)}
+              {['No', 'Owner_name', 'no_tel', 'Property_name', 'property_type', 'Property_price', 'Status', 'Property_link', 'Actions'].map(label => <th key={label} scope="col" className="border border-slate-300/40 px-3 py-3">{label}</th>)}
             </tr></thead>
             <tbody>{filtered.map(({ row, number }) => <tr key={row.id} className="even:bg-slate-50">
               <td className="border border-slate-200 px-3 py-2">{number}</td>
@@ -129,6 +135,7 @@ export function OwnerListingSheet() {
               <td className="border border-slate-200 px-3 py-2">{typeSelect(row)}</td>
               <td className="whitespace-nowrap border border-slate-200 px-3 py-2 text-right tabular-nums">{formatPrice(row.propertyPrice)}</td>
               <td className="border border-slate-200 px-3 py-2">{statusSelect(row)}</td>
+              <td className="border border-slate-200 px-3 py-2"><PropertyPostLink row={row} /></td>
               <td className="border border-slate-200 px-3 py-2">{actions(row)}</td>
             </tr>)}</tbody>
           </table>
@@ -142,6 +149,7 @@ export function OwnerListingSheet() {
             <div><dt className="text-slate-500">Property price</dt><dd className="break-words tabular-nums">{formatPrice(row.propertyPrice)}</dd></div>
             <div><dt className="text-slate-500">Property type</dt><dd>{typeSelect(row)}</dd></div>
             <div><dt className="text-slate-500">Status</dt><dd>{statusSelect(row)}</dd></div>
+            <div><dt className="text-slate-500">Property link</dt><dd><PropertyPostLink row={row} /></dd></div>
           </dl>
           {actions(row)}
         </article>)}</div>
@@ -182,6 +190,7 @@ function OwnerForm({ initial, number, onClose, onSave }: { initial: OwnerListing
           <label className="min-w-0 space-y-1 text-sm">Owner name<input autoFocus required maxLength={200} className={control} value={form.ownerName} onChange={event => setForm({ ...form, ownerName: event.target.value })} /></label>
           <label className="min-w-0 space-y-1 text-sm">Phone number<input required type="tel" maxLength={50} className={control} value={form.noTel} onChange={event => setForm({ ...form, noTel: event.target.value })} /></label>
           <label className="min-w-0 space-y-1 text-sm sm:col-span-2">Property name<input required maxLength={300} className={control} value={form.propertyName} onChange={event => setForm({ ...form, propertyName: event.target.value })} /></label>
+          <label className="min-w-0 space-y-1 text-sm sm:col-span-2">Property link (optional)<input type="url" inputMode="url" maxLength={2048} placeholder="https://example.com/original-post" className={control} value={form.propertyLink ?? ''} onChange={event => setForm({ ...form, propertyLink: event.target.value })} /></label>
           <label className="min-w-0 space-y-1 text-sm">Property type<select aria-label="Property type" className={control} value={form.propertyType} onChange={event => setForm({ ...form, propertyType: event.target.value as OwnerListingInput['propertyType'] })}>
             {OWNER_PROPERTY_TYPES.map(value => <option key={value}>{value}</option>)}
           </select></label>

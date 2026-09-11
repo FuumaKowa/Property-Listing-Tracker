@@ -1,6 +1,6 @@
 import { AuthEnv, authError, getSessionUser } from './_auth';
 import { getDb, getErrorMessage, json } from './_db';
-import { OwnerListingDb, ownerListingsTableSql, readOwnerListings, writeOwnerListing, removeOwnerListing } from '../../src/db/ownerListings';
+import { OwnerListingDb, ownerListingsTableSql, ownerListingsLinkSql, readOwnerListings, writeOwnerListing, removeOwnerListing } from '../../src/db/ownerListings';
 import { validateOwnerListing } from '../../src/ownerListing';
 
 interface Context { env: AuthEnv; request: Request; params?: { id?: string } }
@@ -26,6 +26,7 @@ export async function handleOwnerListings({ env, request, params }: Context, ser
     }
     const db = services.connect(env);
     await db.query(ownerListingsTableSql);
+    await db.query(ownerListingsLinkSql);
     if (method === 'GET') return json({ success: true, data: await readOwnerListings(db) });
     if (method === 'DELETE') {
       return await removeOwnerListing(db, id!) ? json({ success: true }) : json({ error: 'Owner listing not found.' }, 404);

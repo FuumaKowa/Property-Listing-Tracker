@@ -50,6 +50,7 @@ try {
     await form.getByLabel('Phone number', { exact: true }).fill('0123456789');
     await form.getByLabel('Property name', { exact: true }).fill('Owner Test Property');
     await form.getByLabel('Property price', { exact: true }).fill('1250000.50');
+    await form.getByLabel('Property link (optional)', { exact: true }).fill('https://example.com/original-post?id=123');
     await form.getByLabel('Property type', { exact: true }).selectOption('highrise');
     await form.getByLabel('Status', { exact: true }).selectOption('Listed');
     await fits(`form ${width}`);
@@ -79,6 +80,13 @@ try {
     await page.reload(); await ownerTab();
     await page.getByText('1 of 1 owner listings', { exact: true }).waitFor();
     assert.equal(await page.getByRole('combobox', { name: 'Property type for Owner Test Property' }).filter({ visible: true }).inputValue(), 'commercial');
+    const postLink = page.getByRole('link', { name: 'Open original post for Owner Test Property (opens in a new tab)', exact: true }).filter({ visible: true });
+    assert.equal(await postLink.getAttribute('href'), 'https://example.com/original-post?id=123');
+    await page.context().route('https://example.com/**', route => route.fulfill({ body: '<h1>Original post</h1>', contentType: 'text/html' }));
+    const [post] = await Promise.all([page.waitForEvent('popup'), postLink.click()]);
+    await post.waitForLoadState();
+    assert.equal(post.url(), 'https://example.com/original-post?id=123');
+    await post.close();
     await page.getByLabel('Search owner listings', { exact: true }).fill('missing');
     await page.getByText('No owner listings match your filters.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
