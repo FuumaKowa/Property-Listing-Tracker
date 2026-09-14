@@ -1,2 +1,7 @@
 node_modules
 dist
+.server
+.wrangler
+.env.local
+.env
+.dev.vars

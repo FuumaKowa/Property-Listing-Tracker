@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "status": "created",
+  "record": {
+    "id": 42,
+    "owner_name": "Not captured",
+    "no_tel": "Not captured",
+    "property_name": "Direct-owner apartment",
+    "property_type": "highrise",
+    "property_price": "300000.00",
+    "property_link": "https://www.mudah.my/example-115623348.htm",
+    "status": "Unlisted",
+    "updated_by_name": "n8n Owner Hunter",
+    "source": "mudah",
+    "listing_id": "115623348",
+    "transaction_type": "sale",
+    "location": "Shah Alam",
+    "source_property_type": "Apartment",
+    "size": "1,041 sq.ft",
+    "bedrooms": 3,
+    "bathrooms": "2.00",
+    "tenure": "Freehold",
+    "advertiser_type": "owner",
+    "owner_status": "verified_owner",
+    "owner_score": "100.0000",
+    "owner_evidence": {
+      "signals": [
+        "Private advertiser"
+      ],
+      "source": "Mudah search card",
+      "agent_signals": []
+    },
+    "listing_date": null,
+    "discovery_channel": "Python Scraper",
+    "found_at": null
+  }
+}

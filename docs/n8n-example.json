@@ -1,0 +1,29 @@
+{
+  "source": "Mudah",
+  "listing_id": "115623348",
+  "title": "Direct-owner apartment",
+  "transaction_type": "sale",
+  "property_type": "Apartment",
+  "location": "Shah Alam",
+  "price": "RM 300,000",
+  "size": "1,041 sq.ft",
+  "bedrooms": "3",
+  "bathrooms": "2",
+  "tenure": "Freehold",
+  "advertiser_type": "owner",
+  "owner_status": "verified_owner",
+  "owner_score": "100",
+  "owner_evidence": {
+    "signals": [
+      "Private advertiser"
+    ],
+    "source": "Mudah search card",
+    "agent_signals": []
+  },
+  "listing_date": "",
+  "url": "https://www.mudah.my/example-115623348.htm",
+  "discovery_channel": "Python Scraper",
+  "found_at": "",
+  "owner_name": "",
+  "phone": ""
+}

@@ -1,7 +1,6 @@
 import express, { type Request, type Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import {
   getAllListingsFromDb,
@@ -12,13 +11,19 @@ import {
 } from './src/db/listings.ts';
 
 import { handleOwnerListings } from './functions/api/_owner-listings.ts';
+import { db } from './src/db/index.ts';
+import { createN8nRouter } from './src/server/n8n/express.ts';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+
+// Authenticate before the global body parser; the integration owns its bounded JSON parser.
+app.use('/api/integrations/n8n/owner-listings', createN8nRouter(
+  () => process.env.N8N_INGEST_API_KEY,
+  statement => db.execute(statement),
+));
 
 app.use(express.json({ limit: '10mb' }));
 

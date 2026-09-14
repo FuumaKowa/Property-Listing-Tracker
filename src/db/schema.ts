@@ -1,5 +1,5 @@
 import { sql, relations } from 'drizzle-orm';
-import { check, integer, numeric, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { check, date, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // Legacy user profile table retained for existing data.
 export const users = pgTable('users', {
@@ -81,6 +81,23 @@ export const listingAuditLogsRelations = relations(listingAuditLogs, ({ one }) =
 
 // Owner records have no expiry or renewal lifecycle.
 export const ownerListings = pgTable('owner_listings', {
+  // OwnerHunter metadata is exclusive to Master Listing Owner.
+  source: text('source'),
+  externalListingId: text('listing_id'),
+  transactionType: text('transaction_type'),
+  location: text('location'),
+  sourcePropertyType: text('source_property_type'),
+  size: text('size'),
+  bedrooms: integer('bedrooms'),
+  bathrooms: numeric('bathrooms', { precision: 8, scale: 2 }),
+  tenure: text('tenure'),
+  advertiserType: text('advertiser_type'),
+  ownerStatus: text('owner_status'),
+  ownerScore: numeric('owner_score', { precision: 10, scale: 4 }),
+  ownerEvidence: jsonb('owner_evidence'),
+  listingDate: date('listing_date', { mode: 'string' }),
+  discoveryChannel: text('discovery_channel'),
+  foundAt: timestamp('found_at', { withTimezone: true, mode: 'string' }),
   id: serial('id').primaryKey(),
   ownerName: text('owner_name').notNull(),
   noTel: text('no_tel').notNull(),
@@ -99,4 +116,5 @@ export const ownerListings = pgTable('owner_listings', {
   check('owner_listings_property_type_check', sql`${table.propertyType} IN ('landed', 'highrise', 'land', 'commercial')`),
   check('owner_listings_property_price_check', sql`${table.propertyPrice} >= 0`),
   check('owner_listings_status_check', sql`${table.status} IN ('Listed', 'Unlisted')`),
+  uniqueIndex('owner_listings_source_listing_id_unique').on(table.source, table.externalListingId),
 ]);
