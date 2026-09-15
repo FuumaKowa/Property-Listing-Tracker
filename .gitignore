@@ -2,6 +2,11 @@ node_modules
 dist
 .server
 .wrangler
-.env.local
-.env
-.dev.vars
+.env*
+!.env.example
+.dev.vars*
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json

@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "neon-postgres-password"
+description = "Neon PostgreSQL password"
+regex = '''\bnpg_[A-Za-z0-9]{12,}\b'''
+keywords = ["npg_"]
