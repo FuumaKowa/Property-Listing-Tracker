@@ -5,6 +5,8 @@ import { saveListings } from './utils/storage';
 import { autoExpireListings, evaluateListingExpiry, isDatePassed } from './utils/dateUtils';
 import { OWNER_SHEET } from './ownerListing';
 import { OwnerListingSheet } from './components/OwnerListingSheet';
+import { PropertyDetailsModal } from './components/Modals/PropertyDetailsModal';
+import { PublicationChannelsModal } from './components/Modals/PublicationChannelsModal';
 import { Header } from './components/Header';
 import { KPIMetrics } from './components/KPIMetrics';
 import { MasterPropertyGrid } from './components/MasterPropertyGrid';
@@ -55,6 +57,9 @@ function Workspace() {
   const [showKPIMetrics, setShowKPIMetrics] = useState<boolean>(false);
 
   // Modal States
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [showChannels, setShowChannels] = useState(false);
+  const [publicationVersion, setPublicationVersion] = useState(0);
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
   const [editingListing, setEditingListing] = useState<PropertyListing | null>(null);
 
@@ -157,51 +162,25 @@ function Workspace() {
 
   // Add or Edit save with automatic date expiration enforcement and Cloud SQL persistence
   const handleSaveListing = async (listing: PropertyListing) => {
-    const checked = evaluateListingExpiry({
-      ...listing,
-      updatedByName: userName || 'Team Member',
-      updatedByEmail: undefined,
-      lastUpdatedAt: new Date().toISOString(),
-    });
-
-    // Optimistic UI update
-    setListings((prev) => {
-      const existsIndex = prev.findIndex((l) => l.id === checked.id);
-      if (existsIndex >= 0) {
-        const updated = [...prev];
-        updated[existsIndex] = checked;
-        return updated;
-      }
-      return [...prev, checked];
-    });
-
-    // Cloud SQL DB update with user attribution
-    try {
-      const exists = listings.some((l) => l.id === checked.id);
-      if (exists) {
-        await updateListingInCloudSql(checked.id, checked, token, userName, undefined);
-      } else {
-        const { id, ...createData } = checked;
-        const saved = await createListingInCloudSql(createData, token, userName, undefined);
-        // Replace with DB-generated ID if created
-        if (saved && saved.id) {
-          setListings((prev) => prev.map((l) => (l.id === checked.id ? saved : l)));
-        }
-      }
-    } catch (err) {
-      console.warn('Cloud SQL listing save warning:', err);
+    const checked = evaluateListingExpiry(listing);
+    const original = editingListing;
+    let saved: PropertyListing;
+    if (original) {
+      const fields = ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode'] as const;
+      const changes = Object.fromEntries(fields.filter(key => checked[key] !== original[key]).map(key => [key, checked[key]]));
+      saved = await updateListingInCloudSql(original.id, changes, token, userName);
+      setListings(prev => prev.map(row => row.id === saved.id ? saved : row));
+    } else {
+      const {id, ...input} = checked;
+      saved = await createListingInCloudSql(input, token, userName);
+      setListings(prev => [...prev, saved]);
     }
   };
 
   const handleDeleteListing = async (id: number) => {
-    if (window.confirm(`Are you sure you want to delete listing #${id}?`)) {
-      setListings((prev) => prev.filter((l) => l.id !== id));
-      try {
-        await deleteListingFromCloudSql(id, token, userName);
-      } catch (err) {
-        console.warn('Cloud SQL delete warning:', err);
-      }
-    }
+    if (!window.confirm('Delete this property listing?')) return;
+    try { await deleteListingFromCloudSql(id, token, userName); setListings(prev => prev.filter(row => row.id !== id)); }
+    catch { alert('The listing could not be deleted. Please try again.'); }
   };
 
   const handleToggleRenewStatus = async (id: number) => {
@@ -218,7 +197,7 @@ function Workspace() {
     }
 
     const datePassed = isDatePassed(current.date);
-    const nextStatus = datePassed ? 'Expired' : nextRenew === 'Renewed' ? 'Active' : current.status;
+    const nextStatus = current.status === 'Sold Out' || current.status === 'Pending' ? current.status : datePassed ? 'Expired' : nextRenew === 'Renewed' ? 'Active' : current.status;
     const nowIso = new Date().toISOString();
 
     setListings((prev) =>
@@ -294,57 +273,25 @@ function Workspace() {
   };
 
   const handleUpdateField = async (id: number, field: keyof PropertyListing, value: string) => {
-    const current = listings.find((l) => l.id === id);
-    if (!current) return;
-
-    const updated: PropertyListing = {
-      ...current,
-      [field]: value,
-      updatedByName: userName || 'Team Member',
-      updatedByEmail: undefined,
-      lastUpdatedAt: new Date().toISOString(),
-    };
-
-    if (field === 'date') {
-      if (value && value.trim() !== '-' && value.trim() !== '' && value.trim() !== 'N/A') {
-        updated.status = isDatePassed(value) ? 'Expired' : 'Active';
-      }
-    }
-
-    setListings((prev) => prev.map((l) => (l.id === id ? updated : l)));
-
-    try {
-      await updateListingInCloudSql(
-        id,
-        {
-          [field]: value,
-          status: updated.status,
-          updatedByName: userName || 'Team Member',
-          updatedByEmail: undefined,
-          lastUpdatedAt: updated.lastUpdatedAt,
-        },
-        token,
-        userName,
-        undefined
-      );
-    } catch (err) {
-      console.warn('Cloud SQL update field warning:', err);
-    }
+    const current=listings.find(row=>row.id===id); if(!current)return;
+    const patch:Partial<PropertyListing>={[field]:value};
+    if(field==='date') { const checked=evaluateListingExpiry({...current,date:value}); if(checked.status!==current.status)patch.status=checked.status;if(checked.renewStatus!==current.renewStatus)patch.renewStatus=checked.renewStatus; }
+    try { const saved=await updateListingInCloudSql(id,patch,token,userName);setListings(prev=>prev.map(row=>row.id===id?saved:row)); }
+    catch { throw new Error('The change could not be saved. Please try again.'); }
   };
 
-  // Batch operations
-  const handleBatchUpdate = (ids: number[], updates: Partial<PropertyListing>) => {
-    setListings((prev) => {
-      const mapped = prev.map((l) => (ids.includes(l.id) ? { ...l, ...updates } : l));
-      const { updatedListings } = autoExpireListings(mapped);
-      return updatedListings;
-    });
+  const handleBatchUpdate = async (ids:number[],updates:Partial<PropertyListing>) => {
+    const results=await Promise.allSettled(ids.map(id=>updateListingInCloudSql(id,updates,token,userName)));
+    const saved=results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
+    setListings(prev=>prev.map(row=>saved.find(item=>item.id===row.id)||row));
+    if(results.some(result=>result.status==='rejected'))alert('Some changes could not be saved. Refresh and try again.');
   };
-
-  const handleBatchDelete = (ids: number[]) => {
-    setListings((prev) => prev.filter((l) => !ids.includes(l.id)));
+  const handleBatchDelete = async (ids:number[]) => {
+    const results=await Promise.allSettled(ids.map(async id=>{await deleteListingFromCloudSql(id,token,userName);return id;}));
+    const removed=results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
+    setListings(prev=>prev.filter(row=>!removed.includes(row.id)));
+    if(results.some(result=>result.status==='rejected'))alert('Some listings could not be deleted. Please try again.');
   };
-
 
   const nextAvailableId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
   const nextDisplayNumber = sheetListings.length + 1;
@@ -354,6 +301,7 @@ function Workspace() {
       {/* 1. Header Toolbar */}
       <Header
         ownerMode={activeSheet === OWNER_SHEET}
+        onOpenPublicationChannels={() => setShowChannels(true)}
         listings={sheetListings}
         showKPIMetrics={showKPIMetrics}
         onToggleKPIMetrics={() => setShowKPIMetrics((prev) => !prev)}
@@ -413,6 +361,8 @@ function Workspace() {
         {/* Master Spreadsheet Table Area */}
         {activeSheet === OWNER_SHEET ? <OwnerListingSheet /> : <MasterPropertyGrid
           listings={sheetListings}
+          publicationVersion={publicationVersion}
+          onViewListing={item => setDetailId(item.id)}
           filters={filters}
           onFilterChange={handleFilterChange}
           onEditListing={(item) => {
@@ -434,6 +384,8 @@ function Workspace() {
 
       </main>
 
+      {detailId !== null && listings.find(row => row.id === detailId) && <PropertyDetailsModal key={detailId} listing={listings.find(row => row.id === detailId)!} onClose={() => setDetailId(null)} onEditListing={item => {setEditingListing(item);setIsAddEditOpen(true);}} onChanged={() => setPublicationVersion(n => n + 1)}/>}
+      {showChannels && <PublicationChannelsModal onClose={() => setShowChannels(false)} onChanged={() => setPublicationVersion(n => n + 1)}/>}
       {/* MODALS */}
       {/* 1. Add / Edit Listing Modal */}
       <ListingFormModal

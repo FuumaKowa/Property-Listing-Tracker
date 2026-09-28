@@ -3,6 +3,7 @@ import { users, listings, listingAuditLogs } from './schema.ts';
 import { eq, desc, isNull } from 'drizzle-orm';
 import { INITIAL_PROPERTY_LISTINGS } from '../data/initialData.ts';
 import { PropertyListing } from '../types.ts';
+import { validateRepostFields } from '../publications.ts';
 
 export interface AuditUserInfo {
   uid?: string;
@@ -114,6 +115,8 @@ export async function createListingInDb(
     date: string;
     renewStatus: string;
     notes?: string;
+    propertyGuruRepostDate?: string | null;
+    propertyGuruRepostMode?: 'Manual' | 'Auto' | null;
   },
   userInfo: AuditUserInfo
 ) {
@@ -123,6 +126,7 @@ export async function createListingInDb(
       .insert(listings)
       .values({
         property: data.property,
+        ...validateRepostFields(data),
         projectCategory: data.projectCategory || 'Project Marketing (PM)',
         location: data.location,
         tenure: data.tenure || '-',
@@ -182,6 +186,8 @@ export async function updateListingInDb(
     date?: string;
     renewStatus?: string;
     notes?: string;
+    propertyGuruRepostDate?: string | null;
+    propertyGuruRepostMode?: 'Manual' | 'Auto' | null;
   },
   userInfo: AuditUserInfo
 ) {
@@ -191,6 +197,7 @@ export async function updateListingInDb(
       .update(listings)
       .set({
         ...updates,
+        ...validateRepostFields(updates),
         updatedByUserId: userInfo.uid || null,
         updatedByName: userInfo.name || 'Anonymous User',
         updatedByEmail: userInfo.email || null,

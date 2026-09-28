@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   ownerMode?: boolean;
+  onOpenPublicationChannels?: () => void;
   listings: PropertyListing[];
   showKPIMetrics: boolean;
   onToggleKPIMetrics: () => void;
@@ -30,6 +31,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   listings,
   ownerMode = false,
+  onOpenPublicationChannels,
   showKPIMetrics,
   onToggleKPIMetrics,
   onOpenAddModal,
@@ -105,6 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end sm:gap-2.5">
+        <button className="ui-button" onClick={onOpenPublicationChannels}>Publication channels</button>
         {/* Main Action buttons */}
         <button
           onClick={onOpenAddModal}

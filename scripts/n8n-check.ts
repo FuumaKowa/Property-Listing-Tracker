@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import nodePath from 'node:path';
 import { ownerListingsTableSql } from '../src/db/ownerListings';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { once } from 'node:events';
@@ -34,9 +37,17 @@ await postgres.exec(ownerListingsTableSql);
 const normalBefore = (await postgres.query('SELECT * FROM listings ORDER BY id')).rows;
 const normalSchemaBefore = (await postgres.query("SELECT column_name,data_type FROM information_schema.columns WHERE table_name='listings' ORDER BY ordinal_position")).rows;
 const db = drizzle(postgres, { schema });
-await migrate(db, { migrationsFolder: './drizzle' });
-await migrate(db, { migrationsFolder: './drizzle' });
-assert.equal((await db.select().from(schema.listings))[0].property, 'Manual listing');
+// This test verifies OwnerHunter's migration in isolation, not later normal-listing features.
+const migrationFixture = mkdtempSync(nodePath.join(tmpdir(), 'owner-migration-'));
+try {
+  mkdirSync(nodePath.join(migrationFixture, 'meta'));
+  const journal = JSON.parse(readFileSync('./drizzle/meta/_journal.json','utf8'));
+  writeFileSync(nodePath.join(migrationFixture,'meta/_journal.json'),JSON.stringify({...journal,entries:journal.entries.filter((entry:{idx:number})=>entry.idx===0)}));
+  writeFileSync(nodePath.join(migrationFixture,'0000_n8n_ingestion.sql'),readFileSync('./drizzle/0000_n8n_ingestion.sql'));
+  await migrate(db, { migrationsFolder: migrationFixture });
+  await migrate(db, { migrationsFolder: migrationFixture });
+} finally { rmSync(migrationFixture,{recursive:true,force:true}); }
+assert.equal((await db.select({property:schema.listings.property}).from(schema.listings))[0].property, 'Manual listing');
 assert.equal((await postgres.query<{ username: string }>('SELECT username FROM auth_users')).rows[0].username, 'unchanged-user');
 
 const secret = 'local-n8n-test-secret-not-a-production-key';

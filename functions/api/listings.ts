@@ -1,5 +1,6 @@
 import { getDb, getErrorMessage, json, listingColumns, PagesEnv } from './_db';
 import { authError, AuthEnv, getSessionUser } from './_auth';
+import { validateRepostFields, PublicationValidationError } from '../../src/publications';
 
 export const onRequestGet = async ({ env, request }: { env: AuthEnv; request: Request }) => {
   try {
@@ -18,6 +19,7 @@ export const onRequestPost = async ({ env, request }: { env: AuthEnv; request: R
     const user = await getSessionUser(request, env);
     if (!user) return authError();
     const body = await request.json() as Record<string, string | undefined>;
+    const repost = validateRepostFields(body);
     if (!body.property || !body.location) {
       return json({ success: false, error: 'Property and location are required.' }, 400);
     }
@@ -26,9 +28,9 @@ export const onRequestPost = async ({ env, request }: { env: AuthEnv; request: R
     const rows = await db.query(`
       INSERT INTO listings (
         property, project_category, location, tenure, pm, negotiator, agent, no_tel, available_units,
-        status, date, renew_status, notes, updated_by_user_id, updated_by_name, updated_by_email, last_updated_at
+        status, date, renew_status, notes, updated_by_user_id, updated_by_name, updated_by_email, last_updated_at, property_guru_repost_date, property_guru_repost_mode
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, $18
       )
       RETURNING ${listingColumns}
     `, [
@@ -48,10 +50,13 @@ export const onRequestPost = async ({ env, request }: { env: AuthEnv; request: R
       String(user.id),
       user.displayName || user.username,
       null,
+      repost.propertyGuruRepostDate ?? null,
+      repost.propertyGuruRepostMode ?? null,
     ]);
 
     return json({ success: true, data: rows[0] }, 201);
   } catch (error) {
+    if (error instanceof PublicationValidationError) return json({success:false,error:error.message},400);
     return json({ success: false, error: getErrorMessage(error) }, 500);
   }
 };

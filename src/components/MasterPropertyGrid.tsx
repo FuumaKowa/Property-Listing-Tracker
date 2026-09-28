@@ -1,948 +1,590 @@
-import React, { useState, useMemo } from 'react';
-import { PropertyListing, FilterState, ProjectCategory, PROJECT_CATEGORIES } from '../types';
-import { getDateStatusInfo, isDatePassed } from '../utils/dateUtils';
-import {
-  Search,
-  ChevronDown,
-  Plus,
-  Trash2,
-  Edit3,
-  Check,
-  X,
-  Sparkles,
-  ArrowUpDown,
-  Filter,
-  History,
-  User,
-  Tag,
-} from 'lucide-react';
-
-export const getCategoryBadgeStyle = (category?: string) => {
-  switch (category) {
-    case 'Project Marketing (PM)':
-      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-    case 'Rental':
-      return 'bg-teal-50 text-teal-700 border-teal-200';
-    case 'Subsale CoA (SSCOA)':
-      return 'bg-amber-50 text-amber-800 border-amber-200';
-    case 'Subsale Direct Listing (SSDL)':
-      return 'bg-sky-50 text-sky-700 border-sky-200';
-    case 'Million Dollar Property (MD)':
-      return 'bg-purple-50 text-purple-700 border-purple-200';
-    case 'Auction':
-      return 'bg-rose-50 text-rose-700 border-rose-200';
-    default:
-      return 'bg-slate-50 text-slate-700 border-slate-200';
-  }
-};
-
-interface MasterPropertyGridProps {
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { History, Pencil, Trash2 } from "lucide-react";
+import { PropertyListing, FilterState, PROJECT_CATEGORIES } from "../types";
+import { fetchPublicationSummaries } from "../services/publications";
+import type { PublicationSummary } from "../publications";
+import { matchesPic, picOptions } from '../utils/listingFilters';
+interface Props {
   listings: PropertyListing[];
   filters: FilterState;
-  onFilterChange: (newFilters: Partial<FilterState>) => void;
-  onEditListing: (listing: PropertyListing) => void;
+  onFilterChange: (filters: Partial<FilterState>) => void;
+  onEditListing: (item: PropertyListing) => void;
+  onViewListing: (item: PropertyListing) => void;
   onDeleteListing: (id: number) => void;
   onToggleRenewStatus: (id: number) => void;
   onToggleStatus?: (id: number) => void;
-  onUpdateField?: (id: number, field: keyof PropertyListing, value: string) => void;
+  onUpdateField?: (
+    id: number,
+    field: keyof PropertyListing,
+    value: string,
+  ) => void | Promise<void>;
   onBatchUpdate: (ids: number[], updates: Partial<PropertyListing>) => void;
   onBatchDelete: (ids: number[]) => void;
-  onOpenAuditLog?: (listingId: number, propertyName: string) => void;
+  onOpenAuditLog?: (id: number, property: string) => void;
   sheetCategory?: string;
+  publicationVersion?: number;
 }
-
-export const MasterPropertyGrid: React.FC<MasterPropertyGridProps> = ({
+export function MasterPropertyGrid({
   listings,
   filters,
   onFilterChange,
+  onViewListing,
   onEditListing,
   onDeleteListing,
-  onToggleRenewStatus,
-  onToggleStatus,
   onUpdateField,
   onBatchUpdate,
   onBatchDelete,
   onOpenAuditLog,
-  sheetCategory = 'All',
-}) => {
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [editingCell, setEditingCell] = useState<{ id: number; field: keyof PropertyListing } | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
-  const usesNegotiatorLabel = sheetCategory === 'Rental' || sheetCategory === 'Subsale CoA (SSCOA)';
-  const peopleColumnLabel = usesNegotiatorLabel ? 'Negotiator / Agent / No Tel' : 'PM';
-
-  // Unique list for PM and Location dropdowns
-  const uniquePMs = useMemo(() => {
-    const set = new Set<string>();
-    listings.forEach((l) => {
-      if (l.pm && l.pm !== '-') {
-        l.pm.split('/').forEach((p) => set.add(p.trim()));
-        set.add(l.pm.trim());
-      }
-    });
-    return Array.from(set).sort();
-  }, [listings]);
-
-  // Filtered & Sorted listings
-  const filteredListings = useMemo(() => {
-    return listings
-      .filter((item) => {
-        // Search query
-        if (filters.searchQuery) {
-          const q = filters.searchQuery.toLowerCase();
-          const matchProp = (item.property || '').toLowerCase().includes(q);
-          const matchCategory = (item.projectCategory || '').toLowerCase().includes(q);
-          const matchLoc = (item.location || '').toLowerCase().includes(q);
-          const matchPM = (item.pm || '').toLowerCase().includes(q);
-          const matchTenure = (item.tenure || '').toLowerCase().includes(q);
-          if (!matchProp && !matchCategory && !matchLoc && !matchPM && !matchTenure) return false;
-        }
-
-        // Project Category filter
-        const selectedCat = filters.projectCategory || filters.category;
-        if (selectedCat && selectedCat !== 'All') {
-          if (item.projectCategory !== selectedCat) return false;
-        }
-
-        // Status filter
-        if (filters.status && filters.status !== 'All') {
-          if (item.status !== filters.status) return false;
-        }
-
-        // Renew Status filter
-        if (filters.renewStatus && filters.renewStatus !== 'All') {
-          if (item.renewStatus !== filters.renewStatus) return false;
-        }
-
-        // PM filter
-        if (filters.pm && filters.pm !== 'All') {
-          if (!(item.pm || '').toLowerCase().includes(filters.pm.toLowerCase())) return false;
-        }
-
-        // Tenure filter
-        if (filters.tenure && filters.tenure !== 'All') {
-          if (filters.tenure === 'FMR') {
-            if (!(item.tenure || '').toLowerCase().includes('malay reserved')) return false;
-          } else if (item.tenure !== filters.tenure) {
-            return false;
-          }
-        }
-
-        return true;
+  sheetCategory,
+  publicationVersion,
+}: Props) {
+  const [selected, setSelected] = useState<number[]>([]),
+    [summaries, setSummaries] = useState<PublicationSummary[]>([]),
+    [summaryError, setSummaryError] = useState(""),
+    [retry, setRetry] = useState(0);
+  const [editing, setEditing] = useState<{
+      id: number;
+      field: keyof PropertyListing;
+    } | null>(null),
+    [value, setValue] = useState("");
+  const [editError, setEditError] = useState('');
+  const saving = useRef(false);
+  const cancelled = useRef(false);
+  const filtered = useMemo(
+    () =>
+      listings
+        .filter(
+          (p) =>
+            [
+              p.property,
+              p.location,
+              p.pm,
+              p.negotiator,
+              p.agent,
+              p.noTel,
+              p.projectCategory,
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(filters.searchQuery.toLowerCase()) &&
+            (!filters.projectCategory ||
+              filters.projectCategory === "All" ||
+              p.projectCategory === filters.projectCategory) &&
+            (filters.status === "All" || p.status === filters.status) &&
+            (filters.renewStatus === "All" ||
+              p.renewStatus === filters.renewStatus) &&
+            (filters.tenure === "All" ||
+              p.tenure === filters.tenure ||
+              (filters.tenure === "FMR" && p.tenure.includes("Malay"))) &&
+            matchesPic(p.pm, filters.pm) &&
+            (filters.location === "All" || p.location === filters.location),
+        )
+        .sort(
+          (a, b) =>
+            String(a[filters.sortBy] ?? "").localeCompare(
+              String(b[filters.sortBy] ?? ""),
+              undefined,
+              { numeric: true },
+            ) * (filters.sortOrder === "asc" ? 1 : -1),
+        ),
+    [listings, filters],
+  );
+  const ids = filtered.map((p) => p.id).join(",");
+  useEffect(() => {
+    let active = true;
+    setSummaryError("");
+    fetchPublicationSummaries(ids ? ids.split(",").map(Number) : [])
+      .then((rows) => {
+        if (active) setSummaries(rows);
       })
-      .sort((a, b) => {
-        const fieldA = a[filters.sortBy];
-        const fieldB = b[filters.sortBy];
-
-        if (fieldA == null) return 1;
-        if (fieldB == null) return -1;
-
-        if (typeof fieldA === 'number' && typeof fieldB === 'number') {
-          return filters.sortOrder === 'asc' ? fieldA - fieldB : fieldB - fieldA;
-        }
-
-        const comp = String(fieldA).localeCompare(String(fieldB));
-        return filters.sortOrder === 'asc' ? comp : -comp;
+      .catch(() => {
+        if (active) setSummaryError("Publication links could not be loaded.");
       });
-  }, [listings, filters]);
-
-  // Handle Sort column click
-  const handleSort = (field: keyof PropertyListing) => {
-    if (filters.sortBy === field) {
-      onFilterChange({ sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' });
-    } else {
-      onFilterChange({ sortBy: field, sortOrder: 'asc' });
-    }
+    return () => {
+      active = false;
+    };
+  }, [ids, publicationVersion, retry]);
+  useEffect(() => {
+    setSelected((prev) =>
+      prev.filter((id) => listings.some((p) => p.id === id)),
+    );
+  }, [listings]);
+  const toggle = (id: number) =>
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const allSelected =
+    filtered.length > 0 && filtered.every((p) => selected.includes(p.id));
+  const selectAll = () =>
+    setSelected((prev) =>
+      allSelected
+        ? prev.filter((id) => !filtered.some((p) => p.id === id))
+        : [...new Set([...prev, ...filtered.map((p) => p.id)])],
+    );
+  const reset = () =>
+    onFilterChange({
+      searchQuery: "",
+      projectCategory: "All",
+      status: "All",
+      renewStatus: "All",
+      tenure: "All",
+      pm: "All",
+      location: "All",
+    });
+  const sort = (field: keyof PropertyListing) =>
+    onFilterChange({
+      sortBy: field,
+      sortOrder:
+        filters.sortBy === field && filters.sortOrder === "asc"
+          ? "desc"
+          : "asc",
+    });
+  const save = async () => {
+    if (!editing || saving.current || cancelled.current) return;
+    saving.current = true;
+    setEditError('');
+    try { await onUpdateField?.(editing.id, editing.field, value); setEditing(null); }
+    catch { setEditError('Could not save. Your draft is retained; press Enter to retry.'); }
+    finally { saving.current = false; }
   };
-
-  // Selection handlers
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(filteredListings.map((l) => l.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const handleToggleSelect = (id: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+  const cell = (
+    p: PropertyListing,
+    field: keyof PropertyListing,
+    fallback?: string,
+  ) => (
+    <div
+      onDoubleClick={() => {
+        if (editing || saving.current) return;
+        cancelled.current = false;
+        setEditError('');
+        setEditing({ id: p.id, field });
+        setValue(String(p[field] ?? ""));
+      }}
+      title="Double-click to edit"
+    >
+      {editing?.id === p.id && editing.field === field ? (
+        <input
+          aria-label={`Edit ${field}`}
+          autoFocus
+          className="ui-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape" && !saving.current) {cancelled.current = true; setEditing(null); setEditError('');}
+          }}
+        />
+      ) : (
+        String(p[field] || fallback || "—")
+      )}
+    </div>
+  );
+  const adButton = (p: PropertyListing) => {
+    const summary = summaries.find((s) => s.listingId === p.id);
+    return (
+      <button
+        className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700"
+        title={summary?.channels.join(", ") || "View published ads"}
+        onClick={() => onViewListing(p)}
+      >
+        {summaryError ? "View links" : `${summary?.count || 0} links`} ↗
+        {!!summary?.channels.length && <span className="mt-1 block max-w-40 truncate text-[10px] text-slate-500">{summary.channels.join(' · ')}</span>}
+      </button>
     );
   };
-
-  const startEdit = (id: number, field: keyof PropertyListing, currentValue: string) => {
-    setEditingCell({ id, field });
-    setEditValue(currentValue);
-  };
-
-  const saveEdit = () => {
-    if (editingCell && onUpdateField) {
-      onUpdateField(editingCell.id, editingCell.field, editValue);
-    }
-    setEditingCell(null);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      saveEdit();
-    } else if (e.key === 'Escape') {
-      setEditingCell(null);
-    }
-  };
-
+  const status = (p: PropertyListing) => (
+    <select
+      aria-label={`Status for ${p.property}`}
+      value={p.status}
+      onChange={(e) => {Promise.resolve(onUpdateField?.(p.id, "status", e.target.value)).catch(()=>setEditError('Status could not be saved. Please try again.'));}}
+      className={`rounded-full border-0 px-2 py-1 text-xs ${p.status === "Active" ? "bg-emerald-50 text-emerald-700" : p.status === "Expired" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}
+    >
+      <option>Active</option>
+      <option>Expired</option>
+      <option value="Sold Out">Sold</option>
+      {p.status === "Pending" && <option>Pending</option>}
+    </select>
+  );
+  const actions = (p: PropertyListing) => (
+    <div className="flex gap-1">
+      <button
+        className="p-2 text-slate-500 hover:text-indigo-700"
+        aria-label="Edit listing"
+        onClick={() => onEditListing(p)}
+      >
+        <Pencil size={15} />
+      </button>
+      <button
+        className="p-2 text-slate-500"
+        aria-label="View property audit history"
+        onClick={() => onOpenAuditLog?.(p.id, p.property)}
+      >
+        <History size={15} />
+      </button>
+      <button
+        className="p-2 text-slate-500 hover:text-rose-700"
+        aria-label="Delete listing"
+        onClick={() => onDeleteListing(p.id)}
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
+  );
+  const headers: [string, keyof PropertyListing | null][] = [
+    ["No.", "id"],
+    ["Property address", "property"],
+    ["Property category", "projectCategory"],
+    ["Location", "location"],
+    ["Lister", "negotiator"],
+    ["PIC", "pm"],
+    ["Lister phone", "noTel"],
+    ["Available units", "availableUnits"],
+    ["Status", "status"],
+    ["PropertyGuru expiry", "date"],
+    ["PG repost / auto repost", "propertyGuruRepostDate"],
+    ["Published ads", null],
+    ["Renewal", "renewStatus"],
+    ["Actions", null],
+  ];
   return (
-    <div className="min-w-0 flex-1 flex flex-col bg-white md:overflow-hidden">
-      {/* Top Lightweight Filter & Action Bar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
-        <div className="grid min-w-0 w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:flex-1 xl:flex-wrap xl:items-center">
-          <div className="relative min-w-0 sm:col-span-2 xl:flex-1 xl:min-w-64">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={filters.searchQuery}
-              onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
-              placeholder="Search properties, locations, or PMs..."
-              className="text-xs pl-8 pr-2.5 py-1.5 border border-slate-300 rounded outline-none w-full bg-white text-slate-800 placeholder-slate-400 focus:border-indigo-600"
-            />
-          </div>
-
-          {/* Quick Project Category Dropdown */}
-          <select
-            value={filters.projectCategory || filters.category || 'All'}
-            onChange={(e) =>
-              onFilterChange({ projectCategory: e.target.value, category: e.target.value })
-            }
-            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
-            title="Filter by Project Category"
-          >
-            <option value="All">All Categories</option>
-            {PROJECT_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-
-          {/* Quick PM Dropdown */}
-          <select
-            value={filters.pm}
-            onChange={(e) => onFilterChange({ pm: e.target.value })}
-            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
-          >
-            <option value="All">{usesNegotiatorLabel ? 'All Negotiators / Agents' : 'All PMs'}</option>
-            {uniquePMs.map((pm) => (
-              <option key={pm} value={pm}>
-                {pm}
-              </option>
-            ))}
-          </select>
-
-          {/* Quick Status Dropdown */}
-          <select
-            value={filters.status}
-            onChange={(e) => onFilterChange({ status: e.target.value })}
-            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
-          >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Expired">Expired</option>
-          </select>
-
-          {/* Quick Renew Status Dropdown */}
-          <select
-            value={filters.renewStatus}
-            onChange={(e) => onFilterChange({ renewStatus: e.target.value })}
-            className="min-w-0 max-w-full flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded outline-none bg-white text-slate-700 focus:border-indigo-600 cursor-pointer sm:flex-none"
-          >
-            <option value="All">All Renewals</option>
-            <option value="Renewed">Renewed</option>
-            <option value="Want to be renew">Want to be renew</option>
-            <option value="Not Renewed">Not Renewed</option>
-          </select>
-        </div>
-
-        {/* Count and Clear */}
-        <div className="flex w-full items-center justify-between gap-3 text-xs text-slate-500 sm:w-auto">
-          <span>
-            Showing <strong className="text-slate-800 font-semibold">{filteredListings.length}</strong> of{' '}
-            {listings.length} rows
-          </span>
-          {(filters.searchQuery ||
-            (filters.projectCategory && filters.projectCategory !== 'All') ||
-            (filters.category && filters.category !== 'All') ||
-            filters.pm !== 'All' ||
-            filters.tenure !== 'All' ||
-            filters.status !== 'All' ||
-            filters.renewStatus !== 'All') && (
-            <button
-              onClick={() =>
-                onFilterChange({
-                  searchQuery: '',
-                  projectCategory: 'All',
-                  category: 'All',
-                  pm: 'All',
-                  tenure: 'All',
-                  status: 'All',
-                  renewStatus: 'All',
-                })
-              }
-              className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold underline cursor-pointer"
-            >
-              Reset Filters
-            </button>
-          )}
-        </div>
+    <div className="min-w-0 flex-1 overflow-y-auto bg-[#f5f6fa] p-3 sm:p-6">
+      <div className="mb-5">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-400">
+          Listing workspace
+        </p>
+        <h2 className="text-2xl font-bold tracking-tight">
+          {sheetCategory === "All" ? "All properties" : sheetCategory}
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Click a property address for details and published ads.
+        </p>
       </div>
-
-      {/* Batch Operations Bar */}
-      {selectedIds.length > 0 && (
-        <div className="bg-[#3c437a] text-white px-4 py-1.5 flex flex-wrap gap-2 items-center justify-between text-xs shrink-0">
-          <span className="font-semibold">{selectedIds.length} rows selected</span>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                onBatchUpdate(selectedIds, { renewStatus: 'Renewed', status: 'Active' });
-                setSelectedIds([]);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded text-xs font-medium cursor-pointer"
-            >
-              Mark Renewed
-            </button>
-            <button
-              onClick={() => {
-                onBatchUpdate(selectedIds, { renewStatus: 'Want to be renew' });
-                setSelectedIds([]);
-              }}
-              className="bg-orange-500 hover:bg-orange-600 px-2.5 py-1 rounded text-xs font-medium cursor-pointer"
-            >
-              Mark Want to Renew
-            </button>
-            <button
-              onClick={() => {
-                onBatchUpdate(selectedIds, { status: 'Expired', renewStatus: 'Not Renewed' });
-                setSelectedIds([]);
-              }}
-              className="bg-rose-600 hover:bg-rose-700 px-2.5 py-1 rounded text-xs font-medium cursor-pointer"
-            >
-              Mark Expired
-            </button>
-            <button
-              onClick={() => {
-                if (window.confirm(`Delete ${selectedIds.length} listings?`)) {
-                  onBatchDelete(selectedIds);
-                  setSelectedIds([]);
-                }
-              }}
-              className="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-xs font-medium cursor-pointer"
-            >
-              Delete Selected
-            </button>
-            <button
-              onClick={() => setSelectedIds([])}
-              className="text-slate-300 hover:text-white underline ml-2 cursor-pointer"
-            >
-              Deselect
-            </button>
-          </div>
+      <div className="flex flex-wrap gap-2 rounded-t-xl border border-slate-200 bg-white p-4">
+        <input
+          className="ui-input !w-full sm:!w-72"
+          aria-label="Search properties"
+          placeholder="Search properties, locations, or PMs..."
+          value={filters.searchQuery}
+          onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
+        />
+        <select
+          aria-label="Filter status"
+          className="ui-button"
+          value={filters.status}
+          onChange={(e) => onFilterChange({ status: e.target.value })}
+        >
+          <option value="All">All statuses</option>
+          <option>Active</option>
+          <option>Expired</option>
+          <option value="Sold Out">Sold</option>
+          <option>Pending</option>
+        </select>
+        <select
+          aria-label="Filter property category"
+          className="ui-button"
+          value={filters.projectCategory || "All"}
+          onChange={(e) => onFilterChange({ projectCategory: e.target.value })}
+        >
+          <option value="All">All categories</option>
+          {PROJECT_CATEGORIES.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter renewal"
+          className="ui-button"
+          value={filters.renewStatus}
+          onChange={(e) => onFilterChange({ renewStatus: e.target.value })}
+        >
+          <option value="All">All renewal states</option>
+          {[
+            "Renewed",
+            "Not Renewed",
+            "Want to be renew",
+            "In Progress",
+            "-",
+          ].map((v) => (
+            <option key={v}>{v}</option>
+          ))}
+        </select>
+        {(["pm", "location", "tenure"] as const).map((field) => (
+          <select
+            key={field}
+            aria-label={`Filter ${field}`}
+            className="ui-button"
+            value={filters[field]}
+            onChange={(e) => onFilterChange({ [field]: e.target.value })}
+          >
+            <option value="All">
+              All{" "}
+              {field === "pm"
+                ? "PICs"
+                : field === "tenure"
+                  ? "tenures"
+                  : "locations"}
+            </option>
+            {(field === 'pm' ? picOptions(listings.map(p=>p.pm)) : [...new Set(listings.map((p) => p[field]).filter(Boolean))]).map(
+              (v) => (
+                <option key={v}>{v}</option>
+              ),
+            )}
+          </select>
+        ))}
+        <button className="ui-button" onClick={reset}>
+          Reset Filters
+        </button>
+      </div>
+      {summaryError && (
+        <div role="alert" className="bg-amber-50 p-3 text-xs text-amber-800">
+          {summaryError}{" "}
+          <button onClick={() => setRetry((n) => n + 1)} className="underline">
+            Retry
+          </button>
         </div>
       )}
-
-      {/* Phones use cards so every field and action is reachable without sideways scrolling. */}
-      <section className="space-y-3 bg-slate-50 p-3 md:hidden" aria-label="Property listings">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <label className="flex items-center gap-2 min-h-11">
-            <input type="checkbox" checked={filteredListings.length > 0 && filteredListings.every(item => selectedIds.includes(item.id))} onChange={handleSelectAll} />
+      {editError && <p role="alert" className="bg-rose-50 p-3 text-sm text-rose-700">{editError}</p>}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 bg-indigo-50 p-3 text-xs">
+          <strong>{selected.length} selected</strong>
+          <button
+            className="ui-button"
+            onClick={() => onBatchUpdate(selected, { renewStatus: "Renewed" })}
+          >
+            Mark renewed
+          </button>
+          <button
+            className="ui-button"
+            onClick={() =>
+              onBatchUpdate(selected, { renewStatus: "Want to be renew" })
+            }
+          >
+            Want to be renew
+          </button>
+          <button
+            className="ui-button"
+            onClick={() =>
+              onBatchUpdate(selected, {
+                status: "Expired",
+                renewStatus: "Not Renewed",
+              })
+            }
+          >
+            Mark expired
+          </button>
+          <button
+            className="ui-button text-rose-700"
+            onClick={() => {
+              if (confirm("Delete the selected listings?")) {
+                onBatchDelete(selected);
+                setSelected([]);
+              }
+            }}
+          >
+            Delete selected
+          </button>
+          <button className="ui-button" onClick={() => setSelected([])}>
+            Deselect
+          </button>
+        </div>
+      )}
+      <div
+        className="hidden overflow-x-auto rounded-b-xl border border-t-0 border-slate-200 bg-white md:block"
+        role="region"
+        aria-label="Property listings spreadsheet"
+        tabIndex={0}
+      >
+        <table className="w-full whitespace-nowrap text-left text-xs">
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="p-4">
+                <input
+                  type="checkbox"
+                  aria-label="Select all"
+                  checked={allSelected}
+                  onChange={selectAll}
+                />
+              </th>
+              {headers.map(([label, field]) => (
+                <th key={label} className="px-4 py-4">
+                  {field ? (
+                    <button onClick={() => sort(field)}>
+                      {label}
+                      {filters.sortBy === field
+                        ? filters.sortOrder === "asc"
+                          ? " ↑"
+                          : " ↓"
+                        : ""}
+                    </button>
+                  ) : (
+                    label
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((p, i) => (
+              <tr
+                key={p.id}
+                className={`border-t border-slate-100 ${selected.includes(p.id) ? "bg-indigo-50" : "hover:bg-slate-50/50"}`}
+              >
+                <td className="p-4">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${p.property}`}
+                    checked={selected.includes(p.id)}
+                    onChange={() => toggle(p.id)}
+                  />
+                </td>
+                <td className="px-4 py-5 text-slate-400">{i + 1}</td>
+                <td className="px-4 py-5">
+                  <button
+                    className="font-semibold text-indigo-800 hover:underline"
+                    onClick={() => onViewListing(p)}
+                  >
+                    {p.property}
+                  </button>
+                </td>
+                <td className="px-4">
+                  <span className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700">
+                    {p.projectCategory}
+                  </span>
+                </td>
+                <td className="px-4">{cell(p, "location")}</td>
+                <td className="px-4">{cell(p, "negotiator", p.agent)}</td>
+                <td className="px-4">{cell(p, "pm")}</td>
+                <td className="px-4">{cell(p, "noTel")}</td>
+                <td className="px-4">{cell(p, "availableUnits")}</td>
+                <td className="px-4">{status(p)}</td>
+                <td className="px-4">{cell(p, "date")}</td>
+                <td className="px-4">
+                  <button
+                    onClick={() => onEditListing(p)}
+                    className="text-left"
+                  >
+                    {p.propertyGuruRepostDate || "Not scheduled"}
+                    <span className="block text-[10px] text-slate-400">
+                      {p.propertyGuruRepostMode || "Mode not set"}
+                    </span>
+                  </button>
+                </td>
+                <td className="px-4">{adButton(p)}</td>
+                <td className="px-4">
+                  <select
+                    aria-label={`Renewal for ${p.property}`}
+                    value={p.renewStatus}
+                    onChange={(e) =>
+                        Promise.resolve(onUpdateField?.(p.id, "renewStatus", e.target.value)).catch(()=>setEditError('Renewal could not be saved. Please try again.'))
+                    }
+                    className="rounded border border-slate-200 px-2 py-1"
+                  >
+                    {[
+                      "Renewed",
+                      "Not Renewed",
+                      "Want to be renew",
+                      "In Progress",
+                      "-",
+                    ].map((v) => (
+                      <option key={v}>{v}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2">{actions(p)}</td>
+              </tr>
+            ))}
+            {!filtered.length && (
+              <tr>
+                <td colSpan={15} className="p-10 text-center text-slate-500">
+                  No listings match your filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <section className="space-y-3 md:hidden" aria-label="Property listings">
+        <div className="flex items-center justify-between py-3 text-xs">
+          <label>
+            <input
+              type="checkbox"
+              aria-label="Select all"
+              checked={allSelected}
+              onChange={selectAll}
+            />{" "}
             Select all
           </label>
-          <div className="flex min-w-0 items-center gap-2">
-            <select aria-label="Sort listings" value={filters.sortBy} onChange={event => onFilterChange({ sortBy: event.target.value as keyof PropertyListing })} className="min-w-0 rounded border border-slate-300 bg-white px-2">
-              <option value="id">Number</option>
-              <option value="property">Property</option>
-              <option value="projectCategory">Category</option>
-              <option value="location">Location</option>
-              <option value="tenure">Tenure</option>
-              <option value="pm">PM</option>
-              <option value="status">Status</option>
-              <option value="date">Date</option>
-              <option value="renewStatus">Renewal</option>
-            </select>
-            <button className="rounded border border-slate-300 bg-white px-3" onClick={() => onFilterChange({ sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' })} aria-label={`Sort ${filters.sortOrder === 'asc' ? 'descending' : 'ascending'}`}>
-              {filters.sortOrder === 'asc' ? '↑' : '↓'}
-            </button>
-          </div>
-        </div>
-        {filteredListings.length === 0 && <p className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No listings match your filters.</p>}
-        {filteredListings.map((item, index) => (
-          <article key={item.id} className="min-w-0 space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-xs">
-            <div className="flex items-start gap-3">
-              <label className="flex min-h-11 shrink-0 items-center gap-2 text-xs text-slate-500">
-                <input type="checkbox" aria-label={`Select ${item.property}`} checked={selectedIds.includes(item.id)} onChange={() => handleToggleSelect(item.id)} />
-                {index + 1}
-              </label>
-              <div className="min-w-0 flex-1">
-                <h2 className="break-words font-semibold text-slate-900">{item.property}</h2>
-                <p className="break-words text-sm text-slate-500">{item.location || '-'}</p>
-              </div>
-            </div>
-            <p className={`w-fit max-w-full rounded border px-2 py-1 text-xs ${getCategoryBadgeStyle(item.projectCategory)}`}>{item.projectCategory || 'Project Marketing (PM)'}</p>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              {([
-                ['Tenure', item.tenure], ['Available units', item.availableUnits],
-                ...(usesNegotiatorLabel ? [['Negotiator', item.negotiator], ['Agent', item.agent], ['Phone', item.noTel]] : [['PM', item.pm]]),
-                ['Status', item.status], ['Date', item.date], ['Renewal', item.renewStatus],
-                ['Updated by', item.updatedByName || 'Team Member'],
-                ['Last updated', item.lastUpdatedAt ? new Date(item.lastUpdatedAt).toLocaleString() : 'Initial'],
-              ]).map(([label, value]) => (
-                <div key={label} className="min-w-0">
-                  <dt className="text-xs text-slate-500">{label}</dt>
-                  <dd className="break-words text-slate-800">{value || '-'}</dd>
-                </div>
+          <select
+            aria-label="Sort listings"
+            className="ui-button"
+            value={filters.sortBy}
+            onChange={(e) =>
+              onFilterChange({
+                sortBy: e.target.value as keyof PropertyListing,
+              })
+            }
+          >
+            {headers
+              .filter(([, f]) => f)
+              .map(([label, f]) => (
+                <option key={f} value={f!}>
+                  {label}
+                </option>
               ))}
-            </dl>
-            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-              <button onClick={() => onEditListing(item)} className="rounded bg-indigo-50 px-3 text-sm font-semibold text-indigo-700">Edit listing</button>
-              {onOpenAuditLog && <button onClick={() => onOpenAuditLog(item.id, item.property)} className="rounded bg-slate-100 px-3 text-sm text-slate-700">History</button>}
-              <button onClick={() => onDeleteListing(item.id)} className="rounded px-3 text-sm text-rose-700">Delete</button>
+          </select>
+          <button
+            className="ui-button"
+            onClick={() =>
+              onFilterChange({
+                sortOrder: filters.sortOrder === "asc" ? "desc" : "asc",
+              })
+            }
+          >
+            {filters.sortOrder === "asc" ? "↑" : "↓"}
+          </button>
+        </div>
+        {filtered.map((p) => (
+          <article
+            key={p.id}
+            className="rounded-xl border border-slate-200 bg-white p-4"
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                aria-label={`Select ${p.property}`}
+                checked={selected.includes(p.id)}
+                onChange={() => toggle(p.id)}
+              />
+              <button
+                className="flex-1 text-left font-semibold text-indigo-800"
+                onClick={() => onViewListing(p)}
+              >
+                {p.property}
+                <span className="mt-1 block text-xs font-normal text-slate-400">
+                  {p.location}
+                </span>
+              </button>
+              {status(p)}
+            </div>
+            <p className="mt-4 text-xs text-slate-500">
+              {p.projectCategory} · {p.availableUnits} units
+            </p>
+            <div className="mt-3 flex items-center justify-between">
+              {adButton(p)}
+              {actions(p)}
             </div>
           </article>
         ))}
+        {!filtered.length && (
+          <p className="p-6 text-center text-sm text-slate-500">
+            No listings match your filters.
+          </p>
+        )}
       </section>
-
-      {/* Spreadsheet Container with Centered Header Title */}
-      <div className="hidden min-h-0 min-w-0 flex-1 overflow-auto bg-slate-50 p-3 md:block md:p-4">
-        <div className="mx-auto w-full max-w-[1800px] rounded-sm border border-slate-300 bg-white shadow-xs">
-          {/* Centered Tracker Title Bar exactly like the user's uploaded spreadsheet */}
-          <div className="bg-white py-2.5 text-center border-b border-slate-300">
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-              Property Listing Tracker
-            </h1>
-          </div>
-
-          {/* Master Spreadsheet Table */}
-          <div className="overflow-x-auto" role="region" aria-label="Property listings spreadsheet" tabIndex={0}>
-          <table className="w-full min-w-[1700px] border-collapse text-left text-[13px]">
-            {/* Dark Purple-Blue Header row (#434a78) */}
-            <thead>
-              <tr className="bg-[#434a78] text-white font-bold border-b border-slate-300 text-xs sm:text-[13px] select-none">
-                <th className="border border-slate-400/50 px-2 py-2 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={
-                      filteredListings.length > 0 &&
-                      selectedIds.length === filteredListings.length
-                    }
-                    onChange={handleSelectAll}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-0 cursor-pointer"
-                    title="Select all"
-                  />
-                </th>
-                <th
-                  onClick={() => handleSort('id')}
-                  className="border border-slate-400/50 px-2.5 py-2 w-12 text-center cursor-pointer hover:bg-[#383e66]"
-                >
-                  No.
-                </th>
-                <th
-                  onClick={() => handleSort('property')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[220px] cursor-pointer hover:bg-[#383e66]"
-                >
-                  Property
-                </th>
-                <th
-                  onClick={() => handleSort('projectCategory')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[200px] cursor-pointer hover:bg-[#383e66]"
-                >
-                  Project Category
-                </th>
-                <th
-                  onClick={() => handleSort('location')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[260px] cursor-pointer hover:bg-[#383e66]"
-                >
-                  Location
-                </th>
-                <th
-                  onClick={() => handleSort('tenure')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[160px] cursor-pointer hover:bg-[#383e66]"
-                >
-                  Tenure
-                </th>
-                {usesNegotiatorLabel ? (
-                  <>
-                    <th className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]">Negotiator</th>
-                    <th className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]">Agent</th>
-                    <th className="border border-slate-400/50 px-3 py-2 min-w-[140px] cursor-pointer hover:bg-[#383e66]">No Tel</th>
-                  </>
-                ) : (
-                  <th
-                    onClick={() => handleSort('pm')}
-                    className="border border-slate-400/50 px-3 py-2 min-w-[150px] cursor-pointer hover:bg-[#383e66]"
-                  >
-                    {peopleColumnLabel}
-                  </th>
-                )}
-                <th
-                  onClick={() => handleSort('availableUnits')}
-                  className="border border-slate-400/50 px-3 py-2 min-w-[130px] cursor-pointer hover:bg-[#383e66]"
-                >
-                  Available Units
-                </th>
-                <th
-                  onClick={() => handleSort('status')}
-                  className="border border-slate-400/50 px-2.5 py-2 w-28 text-center cursor-pointer hover:bg-[#383e66]"
-                >
-                  Status
-                </th>
-                <th
-                  onClick={() => handleSort('date')}
-                  className="border border-slate-400/50 px-2.5 py-2 w-20 text-center cursor-pointer hover:bg-[#383e66]"
-                >
-                  Date
-                </th>
-                <th
-                  onClick={() => handleSort('renewStatus')}
-                  className="border border-slate-400/50 px-2.5 py-2 w-32 text-center cursor-pointer hover:bg-[#383e66]"
-                >
-                  Renew Status
-                </th>
-                <th
-                  onClick={() => handleSort('lastUpdatedAt')}
-                  className="border border-slate-400/50 px-2.5 py-2 min-w-[170px] text-left cursor-pointer hover:bg-[#383e66]"
-                  title="Who updated the listing and when"
-                >
-                  Updated By & When
-                </th>
-                <th className="border border-slate-400/50 px-2 py-2 w-14 text-center">
-                  Edit
-                </th>
-              </tr>
-            </thead>
-
-            {/* Table Body with authentic spreadsheet cell borders and background colors */}
-            <tbody className="divide-y divide-slate-300 text-slate-900">
-              {filteredListings.length === 0 ? (
-                <tr>
-                  <td colSpan={usesNegotiatorLabel ? 15 : 13} className="border border-slate-300 px-4 py-8 text-center text-slate-500">
-                    No listings match the current filters.
-                  </td>
-                </tr>
-              ) : (
-                filteredListings.map((item, rowIndex) => {
-                  const isSelected = selectedIds.includes(item.id);
-                  // In the spreadsheet: Renewed is pale green (#e2efda), Want to be renew is vibrant orange (#fed7aa)
-                  const isRenewed = item.renewStatus === 'Renewed';
-                  const isWantToRenew = item.renewStatus === 'Want to be renew';
-                  const rowBgClass = isSelected
-                    ? 'bg-indigo-100/70'
-                    : isWantToRenew
-                    ? 'bg-[#fed7aa]'
-                    : isRenewed
-                    ? 'bg-[#e2efda]'
-                    : 'bg-white';
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`${rowBgClass} hover:brightness-95 transition-all text-xs sm:text-[13px]`}
-                    >
-                      {/* Checkbox */}
-                      <td className="border border-slate-300 px-2 py-1.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(item.id)}
-                          className="rounded border-slate-300 text-indigo-600 focus:ring-0 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* No. */}
-                      <td className="border border-slate-300 px-2.5 py-1.5 text-center font-normal text-slate-700">
-                        {rowIndex + 1}
-                      </td>
-
-                      {/* Property */}
-                      <td
-                        onDoubleClick={() => startEdit(item.id, 'property', item.property)}
-                        className="border border-slate-300 px-3 py-1.5 font-normal text-slate-900"
-                        title="Double-click to edit inline"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'property' ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={saveEdit}
-                            onKeyDown={handleKeyDown}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                          />
-                        ) : (
-                          item.property
-                        )}
-                      </td>
-
-                      {/* Project Category */}
-                      <td
-                        className="border border-slate-300 px-2.5 py-1.5"
-                        title="Double-click to change category"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'projectCategory' ? (
-                          <select
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setEditValue(val);
-                              if (onUpdateField) {
-                                onUpdateField(item.id, 'projectCategory', val);
-                              }
-                              setEditingCell(null);
-                            }}
-                            onBlur={() => setEditingCell(null)}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white font-medium text-slate-800"
-                          >
-                            {PROJECT_CATEGORIES.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div
-                            onDoubleClick={() =>
-                              startEdit(item.id, 'projectCategory', item.projectCategory || 'Project Marketing (PM)')
-                            }
-                            className="flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium border ${getCategoryBadgeStyle(
-                                item.projectCategory
-                              )}`}
-                            >
-                              {item.projectCategory || 'Project Marketing (PM)'}
-                            </span>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Location */}
-                      <td
-                        onDoubleClick={() => startEdit(item.id, 'location', item.location)}
-                        className="border border-slate-300 px-3 py-1.5 text-slate-800"
-                        title="Double-click to edit inline"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'location' ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={saveEdit}
-                            onKeyDown={handleKeyDown}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                          />
-                        ) : (
-                          item.location
-                        )}
-                      </td>
-
-                      {/* Tenure */}
-                      <td
-                        onDoubleClick={() => startEdit(item.id, 'tenure', item.tenure)}
-                        className="border border-slate-300 px-3 py-1.5 text-slate-800"
-                        title="Double-click to edit inline"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'tenure' ? (
-                          <select
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => {
-                              setEditValue(e.target.value);
-                              if (onUpdateField) onUpdateField(item.id, 'tenure', e.target.value);
-                              setEditingCell(null);
-                            }}
-                            onBlur={() => setEditingCell(null)}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                          >
-                            <option value="Freehold">Freehold</option>
-                            <option value="Leasehold">Leasehold</option>
-                            <option value="Freehold Malay Reserved">Freehold Malay Reserved</option>
-                            <option value="-">-</option>
-                          </select>
-                        ) : (
-                          item.tenure
-                        )}
-                      </td>
-
-                      {/* PM or Rental/Subsale CoA contacts */}
-                      {usesNegotiatorLabel ? (
-                        ([
-                          ['negotiator', item.negotiator || '-'],
-                          ['agent', item.agent || '-'],
-                          ['noTel', item.noTel || '-'],
-                        ] as [keyof PropertyListing, string][]).map(([field, value]) => (
-                          <td
-                            key={field}
-                            onDoubleClick={() => startEdit(item.id, field, value)}
-                            className="border border-slate-300 px-3 py-1.5 text-slate-800"
-                            title="Double-click to edit inline"
-                          >
-                            {editingCell?.id === item.id && editingCell?.field === field ? (
-                              <input
-                                type="text"
-                                autoFocus
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onBlur={saveEdit}
-                                onKeyDown={handleKeyDown}
-                                className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                              />
-                            ) : value}
-                          </td>
-                        ))
-                      ) : (
-                        <td
-                          onDoubleClick={() => startEdit(item.id, 'pm', item.pm)}
-                          className="border border-slate-300 px-3 py-1.5 text-slate-800"
-                          title="Double-click to edit inline"
-                        >
-                          {editingCell?.id === item.id && editingCell?.field === 'pm' ? (
-                            <input
-                              type="text"
-                              autoFocus
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={saveEdit}
-                              onKeyDown={handleKeyDown}
-                              className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                            />
-                          ) : item.pm}
-                        </td>
-                      )}
-
-                      {/* Available Units */}
-                      <td
-                        onDoubleClick={() => startEdit(item.id, 'availableUnits', item.availableUnits)}
-                        className="border border-slate-300 px-3 py-1.5 text-slate-800 font-normal"
-                        title="Double-click to edit inline"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'availableUnits' ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={saveEdit}
-                            onKeyDown={handleKeyDown}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white"
-                          />
-                        ) : (
-                          item.availableUnits
-                        )}
-                      </td>
-
-                      {/* Status (Dropdown Pill exactly matching the image) */}
-                      <td className="border border-slate-300 px-2 py-1.5 text-center">
-                        {(() => {
-                          const dateStatus = getDateStatusInfo(item.date);
-                          return (
-                            <div className="inline-flex items-center justify-center relative">
-                              <select
-                                value={item.status}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val === 'Active' && dateStatus.isPassed) {
-                                    alert(`The date for this listing (${item.date}) has passed. To make it Active, update its date to a future date.`);
-                                    return;
-                                  }
-                                  if (onUpdateField) {
-                                    onUpdateField(item.id, 'status', val);
-                                  } else if (onToggleStatus) {
-                                    onToggleStatus(item.id);
-                                  }
-                                }}
-                                className={`appearance-none cursor-pointer pl-3 pr-6 py-0.5 rounded-full text-xs font-semibold transition-all border outline-none shadow-2xs ${
-                                  item.status === 'Active'
-                                    ? 'bg-[#3cb371] hover:bg-[#34a064] text-white border-[#2e9c5e]'
-                                    : 'bg-[#f87171] hover:bg-[#ef5350] text-slate-900 border-[#f28b82]'
-                                }`}
-                                title={
-                                  dateStatus.isPassed
-                                    ? `Automatically Expired (Date ${item.date} has passed)`
-                                    : `Automatically Active (Date ${item.date} has not passed yet)`
-                                }
-                              >
-                                <option value="Active" className="bg-white text-slate-900">
-                                  Active
-                                </option>
-                                <option value="Expired" className="bg-white text-slate-900">
-                                  Expired
-                                </option>
-                              </select>
-                              <ChevronDown
-                                className={`w-3.5 h-3.5 absolute right-2 pointer-events-none ${
-                                  item.status === 'Active' ? 'text-white' : 'text-slate-800'
-                                }`}
-                              />
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Date */}
-                      <td
-                        onDoubleClick={() => startEdit(item.id, 'date', item.date)}
-                        className="border border-slate-300 px-2.5 py-1.5 text-center text-slate-800"
-                        title="Double-click to edit inline"
-                      >
-                        {editingCell?.id === item.id && editingCell?.field === 'date' ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={saveEdit}
-                            onKeyDown={handleKeyDown}
-                            className="w-full text-xs p-1 border border-indigo-500 rounded bg-white text-center font-mono"
-                          />
-                        ) : (
-                          (() => {
-                            const dateStatus = getDateStatusInfo(item.date);
-                            const hasDate = item.date && item.date.trim() !== '-' && item.date.trim() !== '';
-                            return (
-                              <div
-                                className="inline-flex items-center justify-center gap-1 cursor-pointer"
-                                title={
-                                  dateStatus.isPassed
-                                    ? `Date has passed (${dateStatus.badgeLabel}) • Status is Expired (Double-click to edit)`
-                                    : `Active milestone (${dateStatus.badgeLabel}) • Status is Active (Double-click to edit)`
-                                }
-                              >
-                                <span className={dateStatus.isPassed ? 'text-rose-700 font-medium' : 'text-slate-800'}>
-                                  {item.date}
-                                </span>
-                                {hasDate && (
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                      dateStatus.isPassed ? 'bg-rose-500' : 'bg-emerald-500'
-                                    }`}
-                                    title={dateStatus.badgeLabel}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })()
-                        )}
-                      </td>
-
-                      {/* Renew Status (Dropdown Pill matching the design with orange styling for Want to be renew) */}
-                      <td className="border border-slate-300 px-2 py-1.5 text-center">
-                        <div className="inline-flex items-center justify-center relative">
-                          <select
-                            value={item.renewStatus}
-                            onChange={(e) => {
-                              if (onUpdateField) {
-                                onUpdateField(item.id, 'renewStatus', e.target.value);
-                              } else {
-                                onToggleRenewStatus(item.id);
-                              }
-                            }}
-                            className={`appearance-none cursor-pointer pl-3 pr-6 py-0.5 rounded text-xs transition-all outline-none border ${
-                              item.renewStatus === 'Renewed'
-                                ? 'bg-transparent text-[#27ae60] font-semibold border-transparent hover:bg-emerald-50'
-                                : isWantToRenew
-                                ? 'bg-[#ea580c] text-white font-semibold border-[#c2410c] hover:bg-[#c2410c] shadow-2xs'
-                                : 'bg-[#e2e8f0] text-slate-800 font-normal border-slate-300 hover:bg-[#d8e0e8]'
-                            }`}
-                            title="Click to change renewal status"
-                          >
-                            <option value="Renewed" className="bg-white text-[#27ae60] font-semibold">
-                              Renewed
-                            </option>
-                            <option value="Want to be renew" className="bg-white text-orange-600 font-semibold">
-                              Want to be renew
-                            </option>
-                            <option value="Not Renewed" className="bg-white text-slate-800 font-normal">
-                              Not Renewed
-                            </option>
-                          </select>
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 absolute right-1.5 pointer-events-none ${
-                              item.renewStatus === 'Renewed'
-                                ? 'text-[#27ae60]'
-                                : isWantToRenew
-                                ? 'text-white'
-                                : 'text-slate-600'
-                            }`}
-                          />
-                        </div>
-                      </td>
-
-                      {/* Updated By & When with audit log trigger */}
-                      <td className="border border-slate-300 px-2.5 py-1 text-left">
-                        <div className="flex items-center justify-between gap-1.5">
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[11px] font-semibold text-slate-800 truncate flex items-center gap-1">
-                              <User className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                              {item.updatedByName || 'Team Member'}
-                            </span>
-                            <span className="text-[10px] text-slate-400 truncate">
-                              {item.lastUpdatedAt
-                                ? (() => {
-                                    try {
-                                      const d = new Date(item.lastUpdatedAt);
-                                      return d.toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      });
-                                    } catch {
-                                      return item.lastUpdatedAt;
-                                    }
-                                  })()
-                                : 'Initial'}
-                            </span>
-                          </div>
-                          {onOpenAuditLog && (
-                            <button
-                              onClick={() => onOpenAuditLog(item.id, item.property)}
-                              className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-slate-100 transition shrink-0"
-                              title="View change history for this listing"
-                            >
-                              <History className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Edit Row Action */}
-                      <td className="border border-slate-300 px-1.5 py-1 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => onEditListing(item)}
-                            className="text-slate-400 hover:text-indigo-600 p-1 rounded hover:bg-white/60 transition-colors cursor-pointer"
-                            title="Edit Listing in form modal"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onDeleteListing(item.id)}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-white/60 transition-colors cursor-pointer"
-                            title="Delete Listing"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-          </div>
-        </div>
-      </div>
+      <p className="mt-4 text-xs text-slate-400">
+        Showing {filtered.length} properties · Double-click table details to
+        edit inline
+      </p>
     </div>
   );
-};
+}

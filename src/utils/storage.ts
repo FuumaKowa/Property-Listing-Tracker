@@ -1,5 +1,6 @@
 import { PropertyListing } from '../types';
 import { INITIAL_PROPERTY_LISTINGS } from '../data/initialData';
+import { validateRepostFields } from '../publications';
 import { autoExpireListings } from './dateUtils';
 
 const STORAGE_KEY = 'property_listing_tracker_data_v2';
@@ -40,7 +41,7 @@ export function resetListings(): PropertyListing[] {
 }
 
 export function exportToCSV(listings: PropertyListing[]): void {
-  const headers = ['No.', 'Property', 'Project Category', 'Location', 'Tenure', 'PM', 'Available Units', 'Status', 'Date', 'Renew Status'];
+  const headers = ['No.', 'Property', 'Project Category', 'Location', 'Tenure', 'PM', 'Available Units', 'Status', 'Date', 'Renew Status', 'Negotiator', 'Agent', 'No Tel', 'Notes', 'PropertyGuru Repost Date', 'PropertyGuru Repost Mode'];
   const rows = listings.map((l) => [
     l.id,
     `"${(l.property || '').replace(/"/g, '""')}"`,
@@ -52,6 +53,7 @@ export function exportToCSV(listings: PropertyListing[]): void {
     `"${l.status}"`,
     `"${l.date}"`,
     `"${l.renewStatus}"`,
+    ...[l.negotiator,l.agent,l.noTel,l.notes,l.propertyGuruRepostDate,l.propertyGuruRepostMode].map(value => `"${String(value || '').replace(/"/g, '""')}"`),
   ]);
 
   const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -65,81 +67,26 @@ export function exportToCSV(listings: PropertyListing[]): void {
 }
 
 export function parseCSVToListings(csvText: string, startingId: number): PropertyListing[] {
-  const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return [];
-
-  const results: PropertyListing[] = [];
-  let currentId = startingId;
-
-  // Simple CSV parser supporting quotes
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    const cells: string[] = [];
-    let inQuotes = false;
-    let currentCell = '';
-
-    for (let c = 0; c < line.length; c++) {
-      const char = line[c];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        cells.push(currentCell.trim());
-        currentCell = '';
-      } else {
-        currentCell += char;
-      }
-    }
-    cells.push(currentCell.trim());
-
-    if (cells.length >= 8) {
-      let prop = cells[1] || `Property ${currentId}`;
-      let cat: any = 'Project Marketing (PM)';
-      let loc = '-';
-      let ten = '-';
-      let pmVal = '-';
-      let units = '-';
-      let stat: any = 'Active';
-      let pDate = '';
-      let rStat: any = 'Not Renewed';
-
-      // 10-column format with Category
-      if (cells.length >= 10) {
-        cat = cells[2] || 'Project Marketing (PM)';
-        loc = cells[3] || '-';
-        ten = cells[4] || '-';
-        pmVal = cells[5] || '-';
-        units = cells[6] || '-';
-        stat = cells[7] === 'Expired' ? 'Expired' : 'Active';
-        pDate = cells[8] || `${new Date().getDate()}.${new Date().getMonth() + 1}`;
-        rStat = cells[9]?.includes('Want') ? 'Want to be renew' : cells[9] === 'Renewed' ? 'Renewed' : 'Not Renewed';
-      } else {
-        // Legacy 9-column format
-        loc = cells[2] || '-';
-        ten = cells[3] || '-';
-        pmVal = cells[4] || '-';
-        units = cells[5] || '-';
-        stat = cells[6] === 'Expired' ? 'Expired' : 'Active';
-        pDate = cells[7] || `${new Date().getDate()}.${new Date().getMonth() + 1}`;
-        rStat = cells[8]?.includes('Want') ? 'Want to be renew' : cells[8] === 'Renewed' ? 'Renewed' : 'Not Renewed';
-      }
-
-      const initialItem: PropertyListing = {
-        id: currentId++,
-        property: prop,
-        projectCategory: cat,
-        location: loc,
-        tenure: ten,
-        pm: pmVal,
-        availableUnits: units,
-        status: stat,
-        date: pDate,
-        renewStatus: rStat,
-      };
-
-      results.push(initialItem);
-    }
+  const rows: string[][] = []; let row: string[] = [], value = '', quoted = false;
+  for (let i=0;i<csvText.length;i++) {
+    const c=csvText[i];
+    if(c==='"') { if(quoted&&csvText[i+1]==='"'){value+='"';i++;}else quoted=!quoted; }
+    else if(c===','&&!quoted){row.push(value.trim());value='';}
+    else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&csvText[i+1]==='\n')i++;row.push(value.trim());if(row.some(Boolean))rows.push(row);row=[];value='';}
+    else value+=c;
   }
-
-  const { updatedListings } = autoExpireListings(results);
-  return updatedListings;
+  row.push(value.trim());if(row.some(Boolean))rows.push(row);
+  if(rows.length<2)return [];
+  const hasCategory=rows[0].some(value=>/^(project|property) category$/i.test(value));
+  const results:PropertyListing[]=[];
+  for(const cells of rows.slice(1)){
+    if(cells.length<8)continue;
+    const shift=hasCategory?1:0;
+    const rawStatus=cells[6+shift];
+    const rawRenew=cells[8+shift];
+    let repost:ReturnType<typeof validateRepostFields>={};
+    if(hasCategory&&cells.length>=16){try{repost=validateRepostFields({propertyGuruRepostDate:cells[14],propertyGuruRepostMode:cells[15]});}catch{throw new Error('CSV contains an invalid repost date or mode.');}}
+    results.push({id:startingId++,property:cells[1]||'Unnamed property',projectCategory:hasCategory?(cells[2] as PropertyListing['projectCategory']):'Project Marketing (PM)',location:cells[2+shift]||'-',tenure:cells[3+shift]||'-',pm:cells[4+shift]||'-',availableUnits:cells[5+shift]||'-',status:rawStatus==='Sold'||rawStatus==='Sold Out'?'Sold Out':rawStatus==='Pending'?'Pending':rawStatus==='Expired'?'Expired':'Active',date:cells[7+shift]||'',renewStatus:['Renewed','Not Renewed','Want to be renew','In Progress','-'].includes(rawRenew)?rawRenew as PropertyListing['renewStatus']:'Not Renewed',...(hasCategory&&cells.length>=14?{negotiator:cells[10],agent:cells[11],noTel:cells[12],notes:cells[13]}:{}),...repost});
+  }
+  return autoExpireListings(results).updatedListings;
 }

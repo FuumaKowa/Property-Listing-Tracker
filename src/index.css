@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+.property-dialog { margin: auto; padding: 0; width: min(760px, calc(100vw - 28px)); max-height: calc(100dvh - 36px); border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 24px 80px #15244140; color: #334155; overflow: auto; }
+.property-dialog::backdrop { background: #17213c80; backdrop-filter: blur(4px); }
+.ui-button { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 12px; background: white; cursor: pointer; }
+.ui-button:hover { background: #f1f5f9; }
+.ui-button:disabled { opacity: .5; cursor: default; }
+.ui-primary { background: #434a78; color: white; border-color: #434a78; }
+.ui-primary:hover { background: #353c67; }
+.ui-input { display: block; width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 11px; font-size: 14px; background: white; }
+.ui-label { display: block; font-size: 12px; color: #64748b; }
+.ui-label > .ui-input { margin-top: 5px; }
+
 @layer base {
   html, body, #root { min-width: 0; min-height: 100%; }
   button, input, select, textarea { max-width: 100%; }

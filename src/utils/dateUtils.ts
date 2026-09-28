@@ -187,6 +187,7 @@ export function evaluateListingExpiry(
   listing: PropertyListing,
   referenceDate: Date = new Date()
 ): PropertyListing {
+  if (listing.status === 'Sold Out' || listing.status === 'Pending') return listing;
   const date = parseListingDate(listing.date, referenceDate);
   if (!date) return listing;
   const isPassed = referenceDate.getTime() > date.getTime();

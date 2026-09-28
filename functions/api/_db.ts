@@ -25,6 +25,8 @@ export const listingColumns = `
   available_units AS "availableUnits",
   status,
   date,
+  property_guru_repost_date::text AS "propertyGuruRepostDate",
+  property_guru_repost_mode AS "propertyGuruRepostMode",
   renew_status AS "renewStatus",
   notes,
   updated_by_user_id AS "updatedByUserId",

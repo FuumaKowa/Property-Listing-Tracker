@@ -54,7 +54,7 @@ export const listings = pgTable('listings', {
   updatedByEmail: text('updated_by_email'),
   lastUpdatedAt: timestamp('last_updated_at').defaultNow(),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, table => [check('listings_repost_mode_check', sql`${table.propertyGuruRepostMode} IN ('Manual', 'Auto')`)]);
 
 export const publicationChannels = pgTable('publication_channels', {
   id: serial('id').primaryKey(), name: text('name').notNull(),

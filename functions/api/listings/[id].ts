@@ -1,5 +1,6 @@
 import { getDb, getErrorMessage, json, listingColumns, PagesEnv } from '../_db';
 import { authError, AuthEnv, getSessionUser } from '../_auth';
+import { validateRepostFields, PublicationValidationError } from '../../../src/publications';
 
 export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; request: Request; params: { id?: string } }) => {
   try {
@@ -11,6 +12,7 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
     }
 
     const body = await request.json() as Record<string, string | undefined>;
+    const repost = validateRepostFields(body);
     const db = getDb(env);
     const rows = await db.query(`
       UPDATE listings
@@ -31,7 +33,9 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
         updated_by_user_id = $14,
         updated_by_name = $15,
         updated_by_email = NULL,
-        last_updated_at = NOW()
+        last_updated_at = NOW(),
+        property_guru_repost_date = CASE WHEN $17 THEN $18::date ELSE property_guru_repost_date END,
+        property_guru_repost_mode = CASE WHEN $19 THEN $20::text ELSE property_guru_repost_mode END
       WHERE id = $16
       RETURNING ${listingColumns}
     `, [
@@ -51,6 +55,8 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
       String(user.id),
       user.displayName || user.username,
       id,
+      'propertyGuruRepostDate' in repost, repost.propertyGuruRepostDate ?? null,
+      'propertyGuruRepostMode' in repost, repost.propertyGuruRepostMode ?? null,
     ]);
 
     if (!rows[0]) {
@@ -59,6 +65,7 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
 
     return json({ success: true, data: rows[0] });
   } catch (error) {
+    if (error instanceof PublicationValidationError) return json({success:false,error:error.message},400);
     return json({ success: false, error: getErrorMessage(error) }, 500);
   }
 };

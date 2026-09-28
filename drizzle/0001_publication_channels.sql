@@ -15,8 +15,8 @@ CREATE UNIQUE INDEX publication_channels_name_unique ON public.publication_chann
 --> statement-breakpoint
 CREATE TABLE public.listing_publications (
   id serial PRIMARY KEY,
-  listing_id integer NOT NULL REFERENCES public.listings(id) ON DELETE CASCADE,
-  channel_id integer NOT NULL REFERENCES public.publication_channels(id) ON DELETE RESTRICT,
+  listing_id integer NOT NULL CONSTRAINT listing_publications_listing_id_listings_id_fk REFERENCES public.listings(id) ON DELETE CASCADE,
+  channel_id integer NOT NULL CONSTRAINT listing_publications_channel_id_publication_channels_id_fk REFERENCES public.publication_channels(id) ON DELETE RESTRICT,
   url text NOT NULL CHECK (length(url) BETWEEN 1 AND 2048),
   label text CHECK (length(label) <= 120),
   notes text CHECK (length(notes) <= 4000),

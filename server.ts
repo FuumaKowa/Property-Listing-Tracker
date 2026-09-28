@@ -13,6 +13,7 @@ import {
 import { handleOwnerListings } from './functions/api/_owner-listings.ts';
 import { db } from './src/db/index.ts';
 import { createN8nRouter } from './src/server/n8n/express.ts';
+import { createPublicationsRouter } from './src/server/publications/express.ts';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/integrations/n8n/owner-listings', createN8nRouter(
 ));
 
 app.use(express.json({ limit: '10mb' }));
+app.use('/api', createPublicationsRouter(() => ({ DATABASE_URL: process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '' })));
 
 function userInfo(req: Request) {
   return {
