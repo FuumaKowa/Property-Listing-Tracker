@@ -12,6 +12,8 @@ Review `drizzle/0001_publication_channels.sql` before migrating production. It a
 
 After explicit migration approval, use the direct production connection privately in `DATABASE_URL_UNPOOLED` and run `npm run db:migrate`. Do not use `db:push`. Verify the new columns/tables and preserved existing data before pushing the implementation to `main`; Cloudflare Pages then deploys using the existing GitHub workflow. No new secrets are required. Older deployed code remains compatible with the additive migration, making code rollback possible without dropping the new tables.
 
+Before that production run, establish and verify a recoverable database backup or Neon recovery branch, record the migration state and original schema, and compare existing records after the migration. Preserve colleagues' concurrent edits; differences must be investigated rather than automatically restored from an older snapshot. Stop deployment on any unexplained loss. These production safeguards have not yet been executed.
+
 ## Local preview and verification
 
 `npm run preview:integrated` serves the actual React app at http://127.0.0.1:4176 using synthetic records and a disposable PGlite database. It never imports the production database module or loads dotenv. Data disappears when the process stops. This preview script is not bundled into the production frontend or server.
@@ -21,6 +23,8 @@ Run `npm run lint`, `npm run build`, `npm run test:publications`, `npm run test:
 ## Verification record — 2026-09-28
 
 All commands above passed. The publication suite covers validation, the additive migration, preserved owner and normal listing data, API authentication and CRUD, Express/Pages parity, archived channels, lifecycle rules, CSV round trips, and slash-separated PIC filters. OwnerHunter regression tests also passed, including concurrent duplicate ingestion.
+
+The migration preservation test compares every original field and row across fixtures for all six normal categories, owner listings including OwnerHunter metadata, audit logs, users, and sessions. It includes an unknown legacy JSON field, verifies original column types/defaults/nullability, and confirms the two added fields start as NULL. These are isolated local fixtures, not a production backup or production verification.
 
 Browser checks used the actual React app with disposable sample data: property-card opening, link persistence, channel rename/archive/restore, archived-link preservation, failed inline/channel save draft retention and successful retries, X/Escape/outside close, and focus restoration. Phone (375), tablet (768), and desktop (1440) checks found no page-level horizontal overflow; the desktop table scrolls within its container. The mobile card stays within the viewport and scrolls internally.
 
