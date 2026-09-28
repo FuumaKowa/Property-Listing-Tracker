@@ -8,6 +8,13 @@
       "when": 1789115805967,
       "tag": "0000_n8n_ingestion",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790553600000,
+      "tag": "0001_publication_channels",
+      "breakpoints": true
     }
   ]
 }

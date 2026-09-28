@@ -1,5 +1,5 @@
 import { sql, relations } from 'drizzle-orm';
-import { check, date, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { check, date, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // Legacy user profile table retained for existing data.
 export const users = pgTable('users', {
@@ -44,6 +44,8 @@ export const listings = pgTable('listings', {
   availableUnits: text('available_units').notNull().default('-'),
   status: text('status').notNull().default('Active'),
   date: text('date').notNull().default(''),
+  propertyGuruRepostDate: date('property_guru_repost_date', { mode: 'string' }),
+  propertyGuruRepostMode: text('property_guru_repost_mode'),
   renewStatus: text('renew_status').notNull().default('Not Renewed'),
   notes: text('notes'),
   // Audit trail: who updated the listing and when
@@ -53,6 +55,25 @@ export const listings = pgTable('listings', {
   lastUpdatedAt: timestamp('last_updated_at').defaultNow(),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+export const publicationChannels = pgTable('publication_channels', {
+  id: serial('id').primaryKey(), name: text('name').notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [uniqueIndex('publication_channels_name_unique').on(sql`lower(trim(${table.name}))`), check('publication_channels_name_check', sql`length(trim(${table.name})) BETWEEN 1 AND 80`)]);
+
+export const listingPublications = pgTable('listing_publications', {
+  id: serial('id').primaryKey(),
+  listingId: integer('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
+  channelId: integer('channel_id').notNull().references(() => publicationChannels.id, { onDelete: 'restrict' }),
+  url: text('url').notNull(), label: text('label'), notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [index('listing_publications_listing_idx').on(table.listingId),
+  check('listing_publications_url_check', sql`length(${table.url}) BETWEEN 1 AND 2048`),
+  check('listing_publications_label_check', sql`length(${table.label}) <= 120`),
+  check('listing_publications_notes_check', sql`length(${table.notes}) <= 4000`)]);
 
 // Audit history log for detailed traceability of every edit
 export const listingAuditLogs = pgTable('listing_audit_logs', {

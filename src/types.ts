@@ -32,6 +32,8 @@ export interface PropertyListing {
   availableUnits: string;
   status: ListingStatus;
   date: string;
+  propertyGuruRepostDate?: string | null;
+  propertyGuruRepostMode?: 'Manual' | 'Auto' | null;
   renewStatus: RenewStatus;
   notes?: string;
   updatedAt?: string;
