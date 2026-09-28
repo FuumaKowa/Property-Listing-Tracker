@@ -31,3 +31,11 @@ Browser checks used the actual React app with disposable sample data: property-c
 Review findings resolved: failed inline saves and channel operations no longer discard drafts; joint PIC filtering is retained; absent repost mode is explicitly shown as unset; channel names appear in the compact publication summary on mobile as well as desktop. Browser checks were performed through the supported browser tool instead of adding a separate browser automation script. Database concurrency tests use local PostgreSQL-compatible PGlite fixtures; no claim is made that these exercise real concurrent Neon connections.
 
 The feature was implemented in the existing feature checkout, with no parallel code writer. Production migration and deployment remain a separate gated release step. Do not interpret the passing local checks as evidence that production has been migrated or deployed.
+
+## Approved production migration — 2026-09-28
+
+After explicit user approval, recovery snapshot `before-publication-ui-2026-09-28` (`snap-empty-wildflower-b37o0jxf`) was created from production and verified in Neon's snapshot inventory. A fresh production-derived branch, `publication-ui-test-2026-09-28` (`br-ancient-hat-b3l8hnh1`), passed the exact migration and full existing-row/column/index comparisons.
+
+Production then ran `npm run db:migrate` through its verified direct connection. Normal listings increased from 19 to 21 columns; owner listings stayed at 27. Every existing row's original-field fingerprint matched before/after across 96 normal listings, 6 owner listings, 9 auth users, 12 sessions, and the empty legacy users/audit tables. Original column definitions and indexes matched. Four channel names were seeded, advertisements started empty, and both applied migration hashes matched the local files. No existing record values were changed. Snapshot and test branch are retained; private verification fingerprints are stored under ignored `.server/` paths.
+
+This records database readiness. GitHub push and live Cloudflare verification are reported separately after deployment.
