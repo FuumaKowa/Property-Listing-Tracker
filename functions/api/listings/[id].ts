@@ -1,19 +1,21 @@
 import { getDb, getErrorMessage, json, listingColumns, PagesEnv } from '../_db';
 import { authError, AuthEnv, getSessionUser } from '../_auth';
+import { validatePriority } from '../../../src/utils/listingPresentation';
 import { validateRepostFields, PublicationValidationError } from '../../../src/publications';
 
-export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; request: Request; params: { id?: string } }) => {
+export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; request: Request; params: { id?: string } }, services = { getDb, getSessionUser }) => {
   try {
-    const user = await getSessionUser(request, env);
+    const user = await services.getSessionUser(request, env);
     if (!user) return authError();
     const id = Number(params.id);
     if (!Number.isInteger(id)) {
       return json({ success: false, error: 'Invalid listing ID.' }, 400);
     }
 
-    const body = await request.json() as Record<string, string | undefined>;
+    const body = await request.json() as Record<string, any>;
     const repost = validateRepostFields(body);
-    const db = getDb(env);
+    const priority = validatePriority(body);
+    const db = services.getDb(env);
     const rows = await db.query(`
       UPDATE listings
       SET
@@ -35,7 +37,8 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
         updated_by_email = NULL,
         last_updated_at = NOW(),
         property_guru_repost_date = CASE WHEN $17 THEN $18::date ELSE property_guru_repost_date END,
-        property_guru_repost_mode = CASE WHEN $19 THEN $20::text ELSE property_guru_repost_mode END
+        property_guru_repost_mode = CASE WHEN $19 THEN $20::text ELSE property_guru_repost_mode END,
+        is_priority = COALESCE($21::boolean, is_priority)
       WHERE id = $16
       RETURNING ${listingColumns}
     `, [
@@ -57,6 +60,7 @@ export const onRequestPatch = async ({ env, request, params }: { env: AuthEnv; r
       id,
       'propertyGuruRepostDate' in repost, repost.propertyGuruRepostDate ?? null,
       'propertyGuruRepostMode' in repost, repost.propertyGuruRepostMode ?? null,
+      priority.isPriority ?? null,
     ]);
 
     if (!rows[0]) {

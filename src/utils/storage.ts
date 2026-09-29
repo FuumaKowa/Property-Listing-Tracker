@@ -41,7 +41,7 @@ export function resetListings(): PropertyListing[] {
 }
 
 export function exportToCSV(listings: PropertyListing[]): void {
-  const headers = ['No.', 'Property', 'Project Category', 'Location', 'Tenure', 'PM', 'Available Units', 'Status', 'Date', 'Renew Status', 'Negotiator', 'Agent', 'No Tel', 'Notes', 'PropertyGuru Repost Date', 'PropertyGuru Repost Mode'];
+  const headers = ['No.', 'Property', 'Project Category', 'Location', 'Tenure', 'Lister', 'Available Units', 'Status', 'Date', 'Renew Status', 'Negotiator', 'Agent', 'No Tel', 'Notes', 'PropertyGuru Repost Date', 'PropertyGuru Repost Mode', 'PIC', 'High Priority'];
   const rows = listings.map((l) => [
     l.id,
     `"${(l.property || '').replace(/"/g, '""')}"`,
@@ -53,7 +53,7 @@ export function exportToCSV(listings: PropertyListing[]): void {
     `"${l.status}"`,
     `"${l.date}"`,
     `"${l.renewStatus}"`,
-    ...[l.negotiator,l.agent,l.noTel,l.notes,l.propertyGuruRepostDate,l.propertyGuruRepostMode].map(value => `"${String(value || '').replace(/"/g, '""')}"`),
+    ...[l.negotiator,l.agent,l.noTel,l.notes,l.propertyGuruRepostDate,l.propertyGuruRepostMode,l.createdByName,l.isPriority ? "Yes" : "No"].map(value => `"${String(value || '').replace(/"/g, '""')}"`),
   ]);
 
   const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -86,7 +86,9 @@ export function parseCSVToListings(csvText: string, startingId: number): Propert
     const rawRenew=cells[8+shift];
     let repost:ReturnType<typeof validateRepostFields>={};
     if(hasCategory&&cells.length>=16){try{repost=validateRepostFields({propertyGuruRepostDate:cells[14],propertyGuruRepostMode:cells[15]});}catch{throw new Error('CSV contains an invalid repost date or mode.');}}
-    results.push({id:startingId++,property:cells[1]||'Unnamed property',projectCategory:hasCategory?(cells[2] as PropertyListing['projectCategory']):'Project Marketing (PM)',location:cells[2+shift]||'-',tenure:cells[3+shift]||'-',pm:cells[4+shift]||'-',availableUnits:cells[5+shift]||'-',status:rawStatus==='Sold'||rawStatus==='Sold Out'?'Sold Out':rawStatus==='Pending'?'Pending':rawStatus==='Expired'?'Expired':'Active',date:cells[7+shift]||'',renewStatus:['Renewed','Not Renewed','Want to be renew','In Progress','-'].includes(rawRenew)?rawRenew as PropertyListing['renewStatus']:'Not Renewed',...(hasCategory&&cells.length>=14?{negotiator:cells[10],agent:cells[11],noTel:cells[12],notes:cells[13]}:{}),...repost});
+    const priorityIndex=rows[0].findIndex(value=>value.toLowerCase()==='high priority');
+    const priority=priorityIndex>=0?{isPriority:/^(yes|true)$/i.test(cells[priorityIndex] || '')}:{};
+    results.push({...priority,id:startingId++,property:cells[1]||'Unnamed property',projectCategory:hasCategory?(cells[2] as PropertyListing['projectCategory']):'Project Marketing (PM)',location:cells[2+shift]||'-',tenure:cells[3+shift]||'-',pm:cells[4+shift]||'-',availableUnits:cells[5+shift]||'-',status:rawStatus==='Sold'||rawStatus==='Sold Out'?'Sold Out':rawStatus==='Pending'?'Pending':rawStatus==='Expired'?'Expired':'Active',date:cells[7+shift]||'',renewStatus:['Renewed','Not Renewed','Want to be renew','In Progress','-'].includes(rawRenew)?rawRenew as PropertyListing['renewStatus']:'Not Renewed',...(hasCategory&&cells.length>=14?{negotiator:cells[10],agent:cells[11],noTel:cells[12],notes:cells[13]}:{}),...repost});
   }
   return autoExpireListings(results).updatedListings;
 }

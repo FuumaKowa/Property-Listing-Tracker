@@ -3,6 +3,7 @@ import { users, listings, listingAuditLogs } from './schema.ts';
 import { eq, desc, isNull } from 'drizzle-orm';
 import { INITIAL_PROPERTY_LISTINGS } from '../data/initialData.ts';
 import { PropertyListing } from '../types.ts';
+import { validatePriority } from '../utils/listingPresentation';
 import { validateRepostFields } from '../publications.ts';
 
 export interface AuditUserInfo {
@@ -115,6 +116,7 @@ export async function createListingInDb(
     date: string;
     renewStatus: string;
     notes?: string;
+    isPriority?: boolean;
     propertyGuruRepostDate?: string | null;
     propertyGuruRepostMode?: 'Manual' | 'Auto' | null;
   },
@@ -127,6 +129,9 @@ export async function createListingInDb(
       .values({
         property: data.property,
         ...validateRepostFields(data),
+        ...validatePriority(data),
+        createdByUserId: userInfo.uid || null,
+        createdByName: userInfo.uid ? userInfo.name || null : null,
         projectCategory: data.projectCategory || 'Project Marketing (PM)',
         location: data.location,
         tenure: data.tenure || '-',
@@ -186,6 +191,7 @@ export async function updateListingInDb(
     date?: string;
     renewStatus?: string;
     notes?: string;
+    isPriority?: boolean;
     propertyGuruRepostDate?: string | null;
     propertyGuruRepostMode?: 'Manual' | 'Auto' | null;
   },
@@ -196,7 +202,8 @@ export async function updateListingInDb(
     const [updated] = await db
       .update(listings)
       .set({
-        ...updates,
+        ...Object.fromEntries(Object.entries(updates).filter(([key]) => ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'].includes(key))),
+        ...validatePriority(updates),
         ...validateRepostFields(updates),
         updatedByUserId: userInfo.uid || null,
         updatedByName: userInfo.name || 'Anonymous User',

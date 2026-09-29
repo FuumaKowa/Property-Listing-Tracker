@@ -1,5 +1,5 @@
 import { sql, relations } from 'drizzle-orm';
-import { check, date, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, check, date, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // Legacy user profile table retained for existing data.
 export const users = pgTable('users', {
@@ -38,6 +38,9 @@ export const listings = pgTable('listings', {
   location: text('location').notNull(),
   tenure: text('tenure').notNull().default('-'),
   pm: text('pm').notNull().default('-'),
+  createdByUserId: text('created_by_user_id'),
+  createdByName: text('created_by_name'),
+  isPriority: boolean('is_priority').notNull().default(false),
   negotiator: text('negotiator'),
   agent: text('agent'),
   noTel: text('no_tel'),

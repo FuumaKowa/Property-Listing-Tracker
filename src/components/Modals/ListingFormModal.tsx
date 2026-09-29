@@ -5,6 +5,8 @@ import {
   PROJECT_CATEGORIES,
 } from "../../types";
 import { evaluateListingExpiry } from "../../utils/dateUtils";
+import { useAuth } from '../../context/AuthContext';
+import { creatorLabel } from '../../utils/listingPresentation';
 import { ModalFrame } from "./ModalFrame";
 interface Props {
   isOpen: boolean;
@@ -23,6 +25,7 @@ export function ListingFormModal({
   nextId,
   defaultProjectCategory = "Project Marketing (PM)",
 }: Props) {
+  const {user} = useAuth();
   const [form, setForm] = useState<PropertyListing | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -123,8 +126,13 @@ export function ListingFormModal({
           {input("Location", "location")}
           {input("Tenure", "tenure")}
           {input("Available units", "availableUnits")}
-          {input("Lister (negotiator)", "negotiator")}
-          {input("PIC", "pm")}
+          {input("Lister (previously PM)", "pm")}
+          <label className="ui-label">PIC (original creator)
+            <input className="ui-input" readOnly value={listingToEdit ? creatorLabel(listingToEdit) : user?.displayName || user?.username || 'Signed-in creator'} />
+          </label>
+          {input("Negotiator", "negotiator")}
+          <label className="ui-label flex items-center gap-2"><input type="checkbox" checked={!!form.isPriority}
+            onChange={e=>{setForm({...form,isPriority:e.target.checked});setDirty(true);}} />High priority (shared with everyone)</label>
           {input("Lister phone", "noTel")}
           {input("Agent (legacy contact)", "agent")}
           <label className="ui-label">

@@ -10,6 +10,7 @@ import {
   getAuditLogs,
 } from './src/db/listings.ts';
 
+import { getSessionUser } from './functions/api/_auth.ts';
 import { handleOwnerListings } from './functions/api/_owner-listings.ts';
 import { db } from './src/db/index.ts';
 import { createN8nRouter } from './src/server/n8n/express.ts';
@@ -46,7 +47,13 @@ app.get('/api/listings', async (_req: Request, res: Response) => {
 
 app.post('/api/listings', async (req: Request, res: Response) => {
   try {
-    res.status(201).json({ success: true, data: await createListingInDb(req.body, userInfo(req)) });
+    const user = await getSessionUser(new Request('http://localhost/api/listings', {
+      headers: { Cookie: req.headers.cookie || '' },
+    }), {DATABASE_URL: process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || ''});
+    if (!user) return res.status(401).json({success:false,error:'Unauthorized'});
+    res.status(201).json({success:true,data:await createListingInDb(req.body, {
+      uid: String(user.id), name: user.displayName || user.username,
+    })});
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to create listing' });
   }

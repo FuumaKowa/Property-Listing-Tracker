@@ -26,6 +26,9 @@ export interface PropertyListing {
   location: string;
   tenure: TenureType;
   pm: string;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
+  isPriority?: boolean;
   negotiator?: string;
   agent?: string;
   noTel?: string;

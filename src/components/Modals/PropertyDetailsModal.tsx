@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { creatorLabel } from '../../utils/listingPresentation';
 import type { PropertyListing } from "../../types";
 import type {
   ListingPublication,
@@ -57,13 +58,15 @@ export function PropertyDetailsModal({
     ["Property category", listing.projectCategory],
     ["Location", listing.location],
     ["Tenure", listing.tenure],
-    ["Lister", listing.negotiator || listing.agent],
-    ["PIC", listing.pm],
+    ["Lister", listing.pm],
+    ["PIC", creatorLabel(listing)],
     ["Lister phone", listing.noTel],
     ["Available units", listing.availableUnits],
     ["Status", listing.status === "Sold Out" ? "Sold" : listing.status],
     ["Renewal", listing.renewStatus],
-    ["Legacy agent", listing.agent],
+    ["Negotiator", listing.negotiator],
+    ["Agent", listing.agent],
+    ["Priority", listing.isPriority ? "High priority (shared)" : "Normal"],
   ];
   return (
     <ModalFrame

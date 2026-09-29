@@ -166,7 +166,7 @@ function Workspace() {
     const original = editingListing;
     let saved: PropertyListing;
     if (original) {
-      const fields = ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode'] as const;
+      const fields = ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'] as const;
       const changes = Object.fromEntries(fields.filter(key => checked[key] !== original[key]).map(key => [key, checked[key]]));
       saved = await updateListingInCloudSql(original.id, changes, token, userName);
       setListings(prev => prev.map(row => row.id === saved.id ? saved : row));
@@ -272,10 +272,10 @@ function Workspace() {
     }
   };
 
-  const handleUpdateField = async (id: number, field: keyof PropertyListing, value: string) => {
+  const handleUpdateField = async (id: number, field: keyof PropertyListing, value: string | boolean) => {
     const current=listings.find(row=>row.id===id); if(!current)return;
     const patch:Partial<PropertyListing>={[field]:value};
-    if(field==='date') { const checked=evaluateListingExpiry({...current,date:value}); if(checked.status!==current.status)patch.status=checked.status;if(checked.renewStatus!==current.renewStatus)patch.renewStatus=checked.renewStatus; }
+    if(field==='date' && typeof value === 'string') { const checked=evaluateListingExpiry({...current,date:value}); if(checked.status!==current.status)patch.status=checked.status;if(checked.renewStatus!==current.renewStatus)patch.renewStatus=checked.renewStatus; }
     try { const saved=await updateListingInCloudSql(id,patch,token,userName);setListings(prev=>prev.map(row=>row.id===id?saved:row)); }
     catch { throw new Error('The change could not be saved. Please try again.'); }
   };

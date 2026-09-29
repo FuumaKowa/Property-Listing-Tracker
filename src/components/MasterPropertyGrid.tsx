@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { History, Pencil, Trash2 } from "lucide-react";
+import { History, Pencil, Trash2, Star } from "lucide-react";
 import { PropertyListing, FilterState, PROJECT_CATEGORIES } from "../types";
 import { fetchPublicationSummaries } from "../services/publications";
 import type { PublicationSummary } from "../publications";
+import { creatorLabel, renewalRowClass } from '../utils/listingPresentation';
 import { matchesPic, picOptions } from '../utils/listingFilters';
 interface Props {
   listings: PropertyListing[];
@@ -16,7 +17,7 @@ interface Props {
   onUpdateField?: (
     id: number,
     field: keyof PropertyListing,
-    value: string,
+    value: string | boolean,
   ) => void | Promise<void>;
   onBatchUpdate: (ids: number[], updates: Partial<PropertyListing>) => void;
   onBatchDelete: (ids: number[]) => void;
@@ -38,6 +39,9 @@ export function MasterPropertyGrid({
   sheetCategory,
   publicationVersion,
 }: Props) {
+  const [priorityOnly, setPriorityOnly] = useState(false);
+  const [pic, setPic] = useState('All');
+  const [priorityBusy, setPriorityBusy] = useState<number[]>([]);
   const [selected, setSelected] = useState<number[]>([]),
     [summaries, setSummaries] = useState<PublicationSummary[]>([]),
     [summaryError, setSummaryError] = useState(""),
@@ -59,6 +63,7 @@ export function MasterPropertyGrid({
               p.property,
               p.location,
               p.pm,
+              creatorLabel(p),
               p.negotiator,
               p.agent,
               p.noTel,
@@ -70,6 +75,8 @@ export function MasterPropertyGrid({
             (!filters.projectCategory ||
               filters.projectCategory === "All" ||
               p.projectCategory === filters.projectCategory) &&
+            (!priorityOnly || p.isPriority) &&
+            (pic === "All" || creatorLabel(p) === pic) &&
             (filters.status === "All" || p.status === filters.status) &&
             (filters.renewStatus === "All" ||
               p.renewStatus === filters.renewStatus) &&
@@ -87,7 +94,7 @@ export function MasterPropertyGrid({
               { numeric: true },
             ) * (filters.sortOrder === "asc" ? 1 : -1),
         ),
-    [listings, filters],
+    [listings, filters, priorityOnly, pic],
   );
   const ids = filtered.map((p) => p.id).join(",");
   useEffect(() => {
@@ -121,7 +128,8 @@ export function MasterPropertyGrid({
         ? prev.filter((id) => !filtered.some((p) => p.id === id))
         : [...new Set([...prev, ...filtered.map((p) => p.id)])],
     );
-  const reset = () =>
+  const reset = () => {
+    setPriorityOnly(false); setPic("All");
     onFilterChange({
       searchQuery: "",
       projectCategory: "All",
@@ -131,6 +139,7 @@ export function MasterPropertyGrid({
       pm: "All",
       location: "All",
     });
+  };
   const sort = (field: keyof PropertyListing) =>
     onFilterChange({
       sortBy: field,
@@ -231,13 +240,24 @@ export function MasterPropertyGrid({
       </button>
     </div>
   );
+  const priorityButton = (p: PropertyListing) => (
+    <button type="button" aria-label={p.isPriority ? 'Remove priority for ' + p.property : 'Mark high priority for ' + p.property}
+      aria-pressed={!!p.isPriority} disabled={priorityBusy.includes(p.id)} title="Shared team priority"
+      className={'rounded p-1 ' + (p.isPriority ? 'text-amber-600' : 'text-slate-400')}
+      onClick={async () => {
+        setPriorityBusy(ids => [...ids,p.id]);
+        try { await onUpdateField?.(p.id,'isPriority',!p.isPriority); }
+        catch { setEditError('Priority could not be saved. Please try again.'); }
+        finally { setPriorityBusy(ids => ids.filter(id => id !== p.id)); }
+      }}><Star size={17} fill={p.isPriority ? 'currentColor' : 'none'}/></button>
+  );
   const headers: [string, keyof PropertyListing | null][] = [
     ["No.", "id"],
     ["Property address", "property"],
     ["Property category", "projectCategory"],
     ["Location", "location"],
-    ["Lister", "negotiator"],
-    ["PIC", "pm"],
+    ["Lister", "pm"],
+    ["PIC", "createdByName"],
     ["Lister phone", "noTel"],
     ["Available units", "availableUnits"],
     ["Status", "status"],
@@ -264,7 +284,7 @@ export function MasterPropertyGrid({
         <input
           className="ui-input !w-full sm:!w-72"
           aria-label="Search properties"
-          placeholder="Search properties, locations, or PMs..."
+          placeholder="Search properties, listers, or PICs..."
           value={filters.searchQuery}
           onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
         />
@@ -308,10 +328,18 @@ export function MasterPropertyGrid({
             <option key={v}>{v}</option>
           ))}
         </select>
+        <label className="ui-button flex items-center gap-2">
+          <input type="checkbox" checked={priorityOnly} onChange={e=>setPriorityOnly(e.target.checked)} />
+          Priority only ({listings.filter(p=>p.isPriority).length})
+        </label>
+        <select aria-label="Filter PIC" className="ui-button" value={pic} onChange={e=>setPic(e.target.value)}>
+          <option value="All">All PICs</option>
+          {[...new Set(listings.map(creatorLabel))].sort().map(name=><option key={name}>{name}</option>)}
+        </select>
         {(["pm", "location", "tenure"] as const).map((field) => (
           <select
             key={field}
-            aria-label={`Filter ${field}`}
+            aria-label={`Filter ${field === 'pm' ? 'Lister' : field}`}
             className="ui-button"
             value={filters[field]}
             onChange={(e) => onFilterChange({ [field]: e.target.value })}
@@ -319,7 +347,7 @@ export function MasterPropertyGrid({
             <option value="All">
               All{" "}
               {field === "pm"
-                ? "PICs"
+                ? "listers"
                 : field === "tenure"
                   ? "tenures"
                   : "locations"}
@@ -427,7 +455,7 @@ export function MasterPropertyGrid({
             {filtered.map((p, i) => (
               <tr
                 key={p.id}
-                className={`border-t border-slate-100 ${selected.includes(p.id) ? "bg-indigo-50" : "hover:bg-slate-50/50"}`}
+                className={`border-t border-slate-100 ${renewalRowClass(p.renewStatus)} ${selected.includes(p.id) ? "outline outline-2 -outline-offset-2 outline-indigo-400" : ""}`}
               >
                 <td className="p-4">
                   <input
@@ -437,7 +465,7 @@ export function MasterPropertyGrid({
                     onChange={() => toggle(p.id)}
                   />
                 </td>
-                <td className="px-4 py-5 text-slate-400">{i + 1}</td>
+                <td className="px-4 py-5 text-slate-400">{i + 1} {priorityButton(p)}</td>
                 <td className="px-4 py-5">
                   <button
                     className="font-semibold text-indigo-800 hover:underline"
@@ -452,8 +480,8 @@ export function MasterPropertyGrid({
                   </span>
                 </td>
                 <td className="px-4">{cell(p, "location")}</td>
-                <td className="px-4">{cell(p, "negotiator", p.agent)}</td>
                 <td className="px-4">{cell(p, "pm")}</td>
+                <td className="px-4">{creatorLabel(p)}</td>
                 <td className="px-4">{cell(p, "noTel")}</td>
                 <td className="px-4">{cell(p, "availableUnits")}</td>
                 <td className="px-4">{status(p)}</td>
@@ -546,7 +574,7 @@ export function MasterPropertyGrid({
         {filtered.map((p) => (
           <article
             key={p.id}
-            className="rounded-xl border border-slate-200 bg-white p-4"
+            className={`rounded-xl border border-slate-200 p-4 ${renewalRowClass(p.renewStatus)}`}
           >
             <div className="flex items-start gap-3">
               <input
@@ -564,10 +592,12 @@ export function MasterPropertyGrid({
                   {p.location}
                 </span>
               </button>
+              {priorityButton(p)}
               {status(p)}
             </div>
             <p className="mt-4 text-xs text-slate-500">
-              {p.projectCategory} · {p.availableUnits} units
+              {p.projectCategory} · {p.availableUnits} units · {p.renewStatus}
+              <span className="block mt-1">Lister: {p.pm || "Not provided"} · PIC: {creatorLabel(p)}</span>
             </p>
             <div className="mt-3 flex items-center justify-between">
               {adButton(p)}
