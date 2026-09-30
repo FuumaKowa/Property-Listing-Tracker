@@ -27,7 +27,8 @@ export function PropertyDetailsModal({
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0),
-    [dirty, setDirty] = useState(false);
+    [dirty, setDirty] = useState(false),
+    [importBusy, setImportBusy] = useState(false);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -53,7 +54,7 @@ export function PropertyDetailsModal({
     };
   }, [listing.id, retry]);
   const canClose = () =>
-    !dirty || confirm("Discard the unsaved advertisement changes?");
+    !importBusy && (!dirty || confirm("Discard the unsaved advertisement changes?"));
   const fields = [
     ["Property category", listing.projectCategory],
     ["Location", listing.location],
@@ -135,9 +136,11 @@ export function PropertyDetailsModal({
       ) : (
         <PublicationLinks
           listingId={listing.id}
+          propertyName={listing.property}
           links={links}
           channels={channels}
           onDraftChange={setDirty}
+          onBusyChange={setImportBusy}
           onChanged={(next) => {
             setLinks(next);
             onChanged();

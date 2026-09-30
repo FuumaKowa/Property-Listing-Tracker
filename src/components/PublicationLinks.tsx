@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { PublicationReportImport } from './PublicationReportImport';
 import type {
   ListingPublication,
   PublicationChannel,
@@ -12,17 +13,22 @@ import {
 } from "../services/publications";
 export function PublicationLinks({
   listingId,
+  propertyName,
   links,
   channels,
   onChanged,
   onDraftChange,
+  onBusyChange,
 }: {
   listingId: number;
+  propertyName: string;
   links: ListingPublication[];
   channels: PublicationChannel[];
   onChanged: (links: ListingPublication[]) => void;
   onDraftChange: (dirty: boolean) => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
+  const [showImport, setShowImport] = useState(false), [notice, setNotice] = useState('');
   const [draft, setDraft] = useState<(PublicationInput & {version?:number}) | null>(null),
     [editId, setEditId] = useState<number | null>(null),
     [busy, setBusy] = useState(false),
@@ -85,19 +91,26 @@ export function PublicationLinks({
   }
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-semibold">
           Published ads <span className="text-slate-400">({links.length})</span>
         </h3>
+        <div className="flex flex-wrap gap-2">
+        <button type="button" className="ui-button" disabled={busy || !!draft || showImport} onClick={()=>{setShowImport(true);setNotice('');setError('');onDraftChange(true);}}>Paste report</button>
         <button
           type="button"
-          disabled={busy || !!draft}
+          disabled={busy || !!draft || showImport}
           className="ui-button"
           onClick={() => edit()}
         >
           + Add link
         </button>
+        </div>
       </div>
+      {notice && <p role="status" className="mb-3 text-sm text-emerald-700">{notice}</p>}
+      {showImport && <PublicationReportImport listingId={listingId} propertyName={propertyName} links={links} channels={channels} onBusyChange={onBusyChange}
+        onCancel={()=>{setShowImport(false);onDraftChange(false);}}
+        onImported={(updated,message)=>{onChanged(updated);setNotice(message);setShowImport(false);onDraftChange(false);}} />}
       {error && (
         <p role="alert" className="mb-3 text-sm text-rose-700">
           {error}
@@ -217,7 +230,7 @@ export function PublicationLinks({
                   )}
                 </div>
                 <button
-                  disabled={busy || !!draft}
+                  disabled={busy || !!draft || showImport}
                   type="button"
                   aria-label="Edit ad link"
                   className="rounded p-2 text-slate-500"
@@ -226,7 +239,7 @@ export function PublicationLinks({
                   <Pencil size={15} />
                 </button>
                 <button
-                  disabled={busy || !!draft}
+                  disabled={busy || !!draft || showImport}
                   type="button"
                   aria-label="Remove ad link"
                   className="rounded p-2 text-slate-500"

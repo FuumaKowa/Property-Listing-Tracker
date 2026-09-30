@@ -19,7 +19,8 @@
     "test:publications": "tsx scripts/publications-check.ts && tsx scripts/publications-api-check.ts && tsx scripts/listing-lifecycle-check.ts && tsx scripts/renewal-check.ts && tsx scripts/listing-csv-check.ts && tsx scripts/listing-filters-check.ts",
     "preview:integrated": "tsx scripts/local-publications-preview.ts",
     "test:ownership": "tsx scripts/listing-ownership-check.ts",
-    "test:safety": "tsx scripts/listing-safety-check.ts"
+    "test:safety": "tsx scripts/listing-safety-check.ts",
+    "test:report-import": "tsx scripts/report-import-check.ts && tsx scripts/report-import-api-check.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

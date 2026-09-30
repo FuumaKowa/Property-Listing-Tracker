@@ -15,6 +15,7 @@ export function createPublicationsRouter(
       "/publication-channels/:id",
       "/publication-summaries",
       "/listings/:listingId/publications",
+      "/listings/:listingId/publications/import",
       "/listings/:listingId/publications/:id",
     ],
     async (req, res) => {
@@ -31,7 +32,7 @@ export function createPublicationsRouter(
               ? undefined
               : JSON.stringify(req.body),
           }),
-          resource: req.path.startsWith("/publication-channels")
+          resource: req.path.endsWith('/publications/import') ? 'import' : req.path.startsWith("/publication-channels")
             ? "channels"
             : req.path.startsWith("/publication-summaries")
               ? "summaries"

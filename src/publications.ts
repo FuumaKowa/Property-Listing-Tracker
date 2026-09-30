@@ -50,7 +50,7 @@ export function positiveId(value: unknown): number {
 }
 export function validatePublicationInput(value: unknown): PublicationInput {
   const body = objectInput(value);
-  const url = text(body.url, 2048, "URL")!;
+  let url = text(body.url, 2048, "URL")!;
   try {
     const parsed = new URL(url);
     if (
@@ -60,6 +60,8 @@ export function validatePublicationInput(value: unknown): PublicationInput {
       parsed.password
     )
       throw new Error();
+    url = parsed.href;
+    if (url.length > 2048) throw new Error();
   } catch {
     throw new PublicationValidationError(
       "Use a valid http or https URL without credentials.",

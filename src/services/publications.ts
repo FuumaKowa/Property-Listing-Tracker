@@ -34,6 +34,8 @@ export const savePublicationChannel = (
   );
 export const fetchListingPublications = (listingId: number) =>
   request<ListingPublication[]>(`listings/${listingId}/publications`);
+export const importListingPublications = (listingId: number, items: PublicationInput[]) =>
+  request<{links: ListingPublication[]; added: number; skipped: number}>(`listings/${listingId}/publications/import`, 'POST', {items});
 export const saveListingPublication = (
   listingId: number,
   id: number | null,

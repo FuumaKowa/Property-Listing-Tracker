@@ -1,4 +1,5 @@
 import {mutatePublication} from './_publication-mutations';
+import { importPublications } from './_publication-import';
 import { getSessionUser, type AuthEnv, type AuthUser } from "./_auth";
 import { getDb, json } from "./_db";
 import {
@@ -12,7 +13,7 @@ import {
 export interface PublicationsContext {
   request: Request;
   env: AuthEnv;
-  resource: "channels" | "publications" | "summaries";
+  resource: "channels" | "publications" | "summaries" | "import";
   listingId?: string;
   id?: string;
 }
@@ -21,10 +22,15 @@ export interface PublicationsServices {
   connect(env: AuthEnv): {
     query(sql: string, params?: any[]): Promise<Record<string, any>[]>;
   };
+  transact?(env: AuthEnv, statements: {sql: string; params: any[]}[]): Promise<Record<string, any>[][]>;
 }
 const defaults: PublicationsServices = {
   authenticate: getSessionUser,
   connect: getDb,
+  transact: async (env, statements) => {
+    const db = getDb(env);
+    return db.transaction(statements.map(({sql, params}) => db.query(sql, params)), {isolationLevel: 'ReadCommitted'});
+  },
 };
 const channelColumns = 'id, name, archived_at AS "archivedAt"';
 const publicationColumns =
@@ -51,6 +57,10 @@ export async function handlePublications(
     const body = (["POST", "PATCH"].includes(method) || (resource === "publications" && method === "DELETE"))
       ? objectInput(await request.json())
       : {};
+    if (resource === 'import') {
+      if (method !== 'POST') return error('Method not allowed.', 405);
+      return await importPublications(env, services, user, routeId(context.listingId), body);
+    }
     if (resource === "channels") {
       if (method === "GET" && !context.id)
         return success(

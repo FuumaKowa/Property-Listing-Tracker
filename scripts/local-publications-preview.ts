@@ -26,7 +26,15 @@ let failNextSave=false;
 app.post('/__preview/fail-next-save',(_req,res)=>{failNextSave=true;res.json({success:true});});
 app.use('/api',(req,res,next)=>{if(failNextSave&&['POST','PATCH','DELETE'].includes(req.method)){failNextSave=false;res.status(503).json({success:false,error:'Simulated local preview save failure.'});return;}next();});
 app.get('/api/auth/me',(_req,res)=>res.json({authenticated:true,user}));
-app.use('/api',createPublicationsRouter(()=>({DATABASE_URL:'local-only'}),{authenticate:async()=>user,connect:()=>({query:async(sql,params)=>(await pg.query<Record<string,unknown>>(sql,params)).rows})}));
+app.use('/api',createPublicationsRouter(()=>({DATABASE_URL:'local-only'}),{
+  authenticate:async()=>user,
+  connect:()=>({query:async(sql,params)=>(await pg.query<Record<string,unknown>>(sql,params)).rows}),
+  transact:async(_env,statements)=>pg.transaction(async tx=>{
+    const results:Record<string,any>[][]=[];
+    for(const statement of statements)results.push((await tx.query<Record<string,any>>(statement.sql,statement.params)).rows);
+    return results;
+  }),
+}));
 const listingServices:any={getSessionUser:async()=>user,getDb:()=>({query:async(sql:string,params:unknown[])=>(await pg.query(sql,params)).rows})};
 app.use('/api',createListingsRouter(()=>({DATABASE_URL:'local-only'}),listingServices));
 app.get('/api/audit-logs',async(req,res)=>res.json({success:true,data:(await pg.query('SELECT id,listing_id AS "listingId",action,changed_fields AS "changedFields",user_name AS "userName",timestamp FROM listing_audit_logs WHERE ($1::int IS NULL OR listing_id=$1) ORDER BY id DESC',[req.query.listingId?Number(req.query.listingId):null])).rows}));
