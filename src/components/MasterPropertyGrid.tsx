@@ -5,6 +5,7 @@ import { fetchPublicationSummaries } from "../services/publications";
 import type { PublicationSummary } from "../publications";
 import { creatorLabel, renewalRowClass } from '../utils/listingPresentation';
 import { matchesPic, picOptions } from '../utils/listingFilters';
+import { dateInputValue, formatCalendarDate, normalizeDateEdit } from '../utils/datePresentation';
 interface Props {
   listings: PropertyListing[];
   filters: FilterState;
@@ -49,6 +50,7 @@ export function MasterPropertyGrid({
       id: number;
       field: keyof PropertyListing;
       version?: number;
+      original?: string;
     } | null>(null),
     [value, setValue] = useState("");
   const [editError, setEditError] = useState('');
@@ -152,7 +154,7 @@ export function MasterPropertyGrid({
     if (!editing || saving.current || cancelled.current) return;
     saving.current = true;
     setEditError('');
-    try { await onUpdateField?.(editing.id, editing.field, value,editing.version); setEditing(null); }
+    try { await onUpdateField?.(editing.id, editing.field, editing.field==='date' ? normalizeDateEdit(value,editing.original) : value,editing.version); setEditing(null); }
     catch(e) { setEditError((e as Error).message+' Your draft is retained.'); }
     finally { saving.current = false; }
   };
@@ -166,14 +168,15 @@ export function MasterPropertyGrid({
         if (editing || saving.current) return;
         cancelled.current = false;
         setEditError('');
-        setEditing({ id: p.id, field, version:p.version });
-        setValue(String(p[field] ?? ""));
+        setEditing({ id: p.id, field, version:p.version, original:String(p[field] ?? '') });
+        setValue(field==='date' ? dateInputValue(p.date) : String(p[field] ?? ""));
       }}
       title="Double-click to edit"
     >
       {editing?.id === p.id && editing.field === field ? (
         <input
           aria-label={`Edit ${field}`}
+          placeholder={field==='date' ? 'DD/MM/YYYY' : undefined}
           autoFocus
           className="ui-input"
           value={value}
@@ -185,7 +188,7 @@ export function MasterPropertyGrid({
           }}
         />
       ) : (
-        String(p[field] || fallback || "—")
+        field === 'date' ? formatCalendarDate(p.date, fallback || '—') : String(p[field] || fallback || "—")
       )}
     </div>
   );
@@ -489,7 +492,7 @@ export function MasterPropertyGrid({
                     onClick={() => onEditListing(p)}
                     className="text-left"
                   >
-                    {p.propertyGuruRepostDate || "Not scheduled"}
+                    {formatCalendarDate(p.propertyGuruRepostDate, "Not scheduled")}
                     <span className="block text-[10px] text-slate-400">
                       {p.propertyGuruRepostMode || "Mode not set"}
                     </span>

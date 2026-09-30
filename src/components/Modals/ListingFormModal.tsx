@@ -5,6 +5,7 @@ import {
   PROJECT_CATEGORIES,
 } from "../../types";
 import { evaluateListingExpiry } from "../../utils/dateUtils";
+import { dateInputValue, normalizeDateEdit } from '../../utils/datePresentation';
 import { useAuth } from '../../context/AuthContext';
 import { creatorLabel } from '../../utils/listingPresentation';
 import { ModalFrame } from "./ModalFrame";
@@ -26,12 +27,15 @@ export function ListingFormModal({
   defaultProjectCategory = "Project Marketing (PM)",
 }: Props) {
   const {user} = useAuth();
+  const [expiryDraft, setExpiryDraft] = useState(''), [repostDraft, setRepostDraft] = useState('');
   const [form, setForm] = useState<PropertyListing | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [dirty, setDirty] = useState(false);
   useEffect(() => {
     if (isOpen) {
+      setExpiryDraft(dateInputValue(listingToEdit?.date));
+      setRepostDraft(dateInputValue(listingToEdit?.propertyGuruRepostDate));
       setForm(
         listingToEdit
           ? { ...listingToEdit }
@@ -91,7 +95,8 @@ export function ListingFormModal({
                 ...form,
                 property: form.property.trim(),
                 location: form.location.trim(),
-                propertyGuruRepostDate: form.propertyGuruRepostDate || null,
+                date: normalizeDateEdit(expiryDraft, listingToEdit?.date),
+                propertyGuruRepostDate: normalizeDateEdit(repostDraft, listingToEdit?.propertyGuruRepostDate) || null,
                 propertyGuruRepostMode: form.propertyGuruRepostMode || null,
               }),
             );
@@ -166,11 +171,12 @@ export function ListingFormModal({
               ))}
             </select>
           </label>
-          {input(
-            "PropertyGuru expiry (YYYY-MM-DD or existing date format)",
-            "date",
-          )}
-          {input("PropertyGuru repost date", "propertyGuruRepostDate", "date")}
+          <label className="ui-label">PropertyGuru expiry (DD/MM/YYYY)
+            <input className="ui-input" type="text" placeholder="DD/MM/YYYY" value={expiryDraft} onChange={e=>{setExpiryDraft(e.target.value);setDirty(true);}} />
+          </label>
+          <label className="ui-label">PropertyGuru repost date (DD/MM/YYYY)
+            <input className="ui-input" type="text" placeholder="DD/MM/YYYY" value={repostDraft} onChange={e=>{setRepostDraft(e.target.value);setDirty(true);}} />
+          </label>
           <label className="ui-label">
             Repost mode
             <select

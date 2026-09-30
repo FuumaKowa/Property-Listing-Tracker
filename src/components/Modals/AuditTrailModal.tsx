@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, History, User, Clock, Calendar, CheckCircle2, Edit3, PlusCircle } from 'lucide-react';
 import { ListingAuditEntry } from '../../types';
 import { fetchAuditLogs } from '../../services/api';
+import { formatDateTime, formatAuditValue } from '../../utils/datePresentation';
 
 interface AuditTrailModalProps {
   isOpen: boolean;
@@ -34,23 +35,6 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
 
   if (!isOpen) return null;
 
-  const formatDate = (isoString?: string) => {
-    if (!isoString) return '-';
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } catch {
-      return isoString;
-    }
-  };
-
   const parseChanges = (changedFieldsStr?: string) => {
     if (!changedFieldsStr) return null;
     try {
@@ -58,9 +42,9 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
       if('before' in obj || 'after' in obj){
         const before=obj.before||{},after=obj.after||{};
         const hidden=new Set(['id','version','updated_by_user_id','updated_by_name','updated_by_email','last_updated_at','updated_at','created_at']);
-        return [...new Set([...Object.keys(before),...Object.keys(after)])].filter(key=>!hidden.has(key)&&JSON.stringify(before[key])!==JSON.stringify(after[key])).map(key=>key.replaceAll('_',' ')+': '+String(before[key]??'—')+' → '+String(after[key]??'—')).join('\n');
+        return [...new Set([...Object.keys(before),...Object.keys(after)])].filter(key=>!hidden.has(key)&&JSON.stringify(before[key])!==JSON.stringify(after[key])).map(key=>key.replaceAll('_',' ')+': '+formatAuditValue(key,before[key])+' → '+formatAuditValue(key,after[key])).join('\n');
       }
-      return Object.entries(obj).map(([key,val])=>key+': '+String(val)).join(', ');
+      return Object.entries(obj).map(([key,val])=>key+': '+formatAuditValue(key,val)).join(', ');
     } catch {
       return changedFieldsStr;
     }
@@ -147,7 +131,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
                 <div className="text-right shrink-0">
                   <div className="text-xs text-slate-500 font-medium flex items-center gap-1 justify-end">
                     <Calendar className="w-3 h-3 text-slate-400" />
-                    {formatDate(log.timestamp)}
+                    {formatDateTime(log.timestamp)}
                   </div>
                   <div className="text-[10px] text-slate-400 mt-0.5">
                     Listing #{log.listingId}

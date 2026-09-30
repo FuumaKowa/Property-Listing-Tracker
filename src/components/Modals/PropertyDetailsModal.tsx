@@ -11,6 +11,7 @@ import {
 } from "../../services/publications";
 import { PublicationLinks } from "../PublicationLinks";
 import { ModalFrame } from "./ModalFrame";
+import { formatCalendarDate, formatDateTime } from '../../utils/datePresentation';
 export function PropertyDetailsModal({
   listing,
   onClose,
@@ -106,14 +107,14 @@ export function PropertyDetailsModal({
         <div className="grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-4">
           <div>
             <p className="text-xs text-slate-400">PropertyGuru expiry</p>
-            <p className="mt-1 text-sm">{listing.date || "Not scheduled"}</p>
+            <p className="mt-1 text-sm">{formatCalendarDate(listing.date, "Not scheduled")}</p>
           </div>
           <div>
             <p className="text-xs text-slate-400">
               PropertyGuru repost · {listing.propertyGuruRepostMode || "Mode not set"}
             </p>
             <p className="mt-1 text-sm">
-              {listing.propertyGuruRepostDate || "Not scheduled"}
+              {formatCalendarDate(listing.propertyGuruRepostDate, "Not scheduled")}
             </p>
           </div>
         </div>
@@ -155,7 +156,7 @@ export function PropertyDetailsModal({
         <p className="mt-4 text-xs text-slate-400">
           Updated by {listing.updatedByName || "Team Member"}
           {listing.lastUpdatedAt
-            ? ` · ${new Date(listing.lastUpdatedAt).toLocaleString()}`
+            ? ` · ${formatDateTime(listing.lastUpdatedAt)}`
             : ""}
         </p>
       </section>
