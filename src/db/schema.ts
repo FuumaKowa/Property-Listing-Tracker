@@ -38,6 +38,9 @@ export const listings = pgTable('listings', {
   location: text('location').notNull(),
   tenure: text('tenure').notNull().default('-'),
   pm: text('pm').notNull().default('-'),
+  version: integer('version').notNull().default(1),
+  archivedAt: timestamp('archived_at', {withTimezone:true,mode:'string'}),
+  archivedByName: text('archived_by_name'),
   createdByUserId: text('created_by_user_id'),
   createdByName: text('created_by_name'),
   isPriority: boolean('is_priority').notNull().default(false),
@@ -67,6 +70,7 @@ export const publicationChannels = pgTable('publication_channels', {
 }, table => [uniqueIndex('publication_channels_name_unique').on(sql`lower(trim(${table.name}))`), check('publication_channels_name_check', sql`length(trim(${table.name})) BETWEEN 1 AND 80`)]);
 
 export const listingPublications = pgTable('listing_publications', {
+  version: integer('version').notNull().default(1),
   id: serial('id').primaryKey(),
   listingId: integer('listing_id').notNull().references(() => listings.id, { onDelete: 'cascade' }),
   channelId: integer('channel_id').notNull().references(() => publicationChannels.id, { onDelete: 'restrict' }),

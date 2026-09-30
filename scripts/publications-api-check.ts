@@ -17,6 +17,8 @@ async function call(resource: 'channels' | 'publications' | 'summaries', method 
 try {
   await pg.exec("CREATE TABLE listings(id serial PRIMARY KEY, property text); INSERT INTO listings(property) VALUES ('Unchanged'),('Other'); CREATE TABLE owner_listings(id serial PRIMARY KEY, property_name text); INSERT INTO owner_listings(property_name) VALUES ('Unchanged owner')");
   await pg.exec(readFileSync('drizzle/0001_publication_channels.sql','utf8'));
+  await pg.exec("CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer NOT NULL REFERENCES listings(id),action text,changed_fields text,user_uid text,user_name text,timestamp timestamp DEFAULT now())");
+  await pg.exec(readFileSync('drizzle/0003_listing_safety.sql','utf8'));
   const before = (await pg.query('SELECT * FROM listings ORDER BY id')).rows;
   authenticated = false;
   assert.equal((await call('channels')).status, 401); assert.equal(connections, 0);
@@ -27,15 +29,18 @@ try {
   const created = await call('publications','POST',input); assert.equal(created.status,201);
   const ad = (await created.json()).data;
   assert.equal((await call('publications','POST',input)).status,201);
-  assert.equal((await call('publications','PATCH',input,String(ad.id),'2')).status,404);
+  assert.equal((await call('publications','PATCH',{...input,version:1},String(ad.id),'2')).status,404);
   assert.equal((await call('publications','POST',{...input,url:'javascript:alert(1)'})).status,400);
   assert.equal((await call('channels','PATCH',{archived:true},String(channel.id))).status,200);
   assert.equal((await call('publications','POST',input)).status,400);
-  assert.equal((await call('publications','PATCH',{...input,label:'Updated'},String(ad.id))).status,200);
+  assert.equal((await call('publications','PATCH',{...input,label:'Updated',version:1},String(ad.id))).status,200);
+  assert.equal((await call('publications','PATCH',{...input,label:'Stale',version:1},String(ad.id))).status,409);
+  assert.equal((await call('publications','DELETE',{version:1},String(ad.id))).status,409);
+  assert.equal((await pg.query<any>("SELECT count(*)::int AS count FROM listing_audit_logs WHERE action='advertisement_update'")).rows[0].count,1);
   await call('channels','PATCH',{name:'Renamed'},String(channel.id));
   const summary = (await (await call('summaries')).json()).data[0];
   assert.equal(summary.count,2); assert.deepEqual(summary.channels,['Renamed']);
-  assert.equal((await call('publications','DELETE',undefined,String(ad.id))).status,200);
+  assert.equal((await call('publications','DELETE',{version:2},String(ad.id))).status,200);
   assert.equal((await (await call('publications')).json()).data.length,1);
   assert.deepEqual((await pg.query('SELECT * FROM listings ORDER BY id')).rows,before);
   assert.equal((await pg.query<any>('SELECT property_name FROM owner_listings')).rows[0].property_name,'Unchanged owner');

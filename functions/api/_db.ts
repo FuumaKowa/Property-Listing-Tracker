@@ -14,6 +14,9 @@ export function getDb(env: PagesEnv) {
 
 export const listingColumns = `
   id,
+  version,
+  archived_at AS "archivedAt",
+  archived_by_name AS "archivedByName",
   property,
   project_category AS "projectCategory",
   location,

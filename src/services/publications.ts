@@ -37,15 +37,15 @@ export const fetchListingPublications = (listingId: number) =>
 export const saveListingPublication = (
   listingId: number,
   id: number | null,
-  input: PublicationInput,
+  input: PublicationInput & {version?:number},
 ) =>
   request<ListingPublication>(
     `listings/${listingId}/publications${id ? `/${id}` : ""}`,
     id ? "PATCH" : "POST",
     input,
   );
-export const deleteListingPublication = (listingId: number, id: number) =>
-  request(`listings/${listingId}/publications/${id}`, "DELETE");
+export const deleteListingPublication = (listingId: number, id: number, version:number) =>
+  request(`listings/${listingId}/publications/${id}`, "DELETE",{version});
 export async function fetchPublicationSummaries(
   ids: number[],
 ): Promise<PublicationSummary[]> {

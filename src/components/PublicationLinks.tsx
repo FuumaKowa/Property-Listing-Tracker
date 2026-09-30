@@ -23,7 +23,7 @@ export function PublicationLinks({
   onChanged: (links: ListingPublication[]) => void;
   onDraftChange: (dirty: boolean) => void;
 }) {
-  const [draft, setDraft] = useState<PublicationInput | null>(null),
+  const [draft, setDraft] = useState<(PublicationInput & {version?:number}) | null>(null),
     [editId, setEditId] = useState<number | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -55,7 +55,7 @@ export function PublicationLinks({
       const saved = await saveListingPublication(
         listingId,
         editId,
-        validatePublicationInput(draft),
+        {...validatePublicationInput(draft),version:draft?.version},
       );
       onChanged(
         editId
@@ -75,7 +75,7 @@ export function PublicationLinks({
     setBusy(true);
     setError("");
     try {
-      await deleteListingPublication(listingId, ad.id);
+      await deleteListingPublication(listingId, ad.id, ad.version);
       onChanged(links.filter((a) => a.id !== ad.id));
     } catch (e) {
       setError((e as Error).message);

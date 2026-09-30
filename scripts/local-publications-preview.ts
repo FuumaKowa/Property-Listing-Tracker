@@ -1,3 +1,4 @@
+import {createListingsRouter} from '../src/server/listings';
 // Local-only integrated preview: synthetic records, disposable database, no dotenv or Neon connection.
 import express from 'express';
 import { PGlite } from '@electric-sql/pglite';
@@ -11,6 +12,8 @@ const pg = new PGlite();
 await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp DEFAULT now(),created_at timestamp DEFAULT now());`);
 await pg.exec(readFileSync('drizzle/0001_publication_channels.sql','utf8'));
 await pg.exec(readFileSync('drizzle/0002_listing_creator_priority.sql','utf8'));
+await pg.exec(readFileSync('drizzle/0003_listing_safety.sql','utf8'));
+await pg.exec('CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer REFERENCES listings(id),action text,changed_fields text,user_uid text,user_name text,user_email text,timestamp timestamp DEFAULT now())');
 await pg.exec(`INSERT INTO listings(property,project_category,location,tenure,pm,negotiator,agent,no_tel,available_units,status,date,renew_status,notes,updated_by_name) VALUES
 ('The Maple Residences','Project Marketing (PM)','Taman Desa, KL','Freehold','Daniel (sample)','Aina (sample)','Legacy contact','Not captured','6','Active','2099-10-18','Want to be renew','Corner unit with a balcony. Fictional preview record.','Preview'),
 ('18, Jalan Setia Indah','Subsale CoA (SSCOA)','Setia Alam','Freehold','Amir (sample)','Farah (sample)',NULL,'Not captured','1','Sold Out','2020-01-01','Not Renewed','Sold property retained for reference.','Preview'),
@@ -24,12 +27,10 @@ app.post('/__preview/fail-next-save',(_req,res)=>{failNextSave=true;res.json({su
 app.use('/api',(req,res,next)=>{if(failNextSave&&['POST','PATCH','DELETE'].includes(req.method)){failNextSave=false;res.status(503).json({success:false,error:'Simulated local preview save failure.'});return;}next();});
 app.get('/api/auth/me',(_req,res)=>res.json({authenticated:true,user}));
 app.use('/api',createPublicationsRouter(()=>({DATABASE_URL:'local-only'}),{authenticate:async()=>user,connect:()=>({query:async(sql,params)=>(await pg.query<Record<string,unknown>>(sql,params)).rows})}));
-app.get('/api/listings',async(_req,res)=>res.json({success:true,data:(await pg.query(`SELECT ${listingColumns} FROM listings ORDER BY id`)).rows}));
 const listingServices:any={getSessionUser:async()=>user,getDb:()=>({query:async(sql:string,params:unknown[])=>(await pg.query(sql,params)).rows})};
-app.patch('/api/listings/:id',async(req,res)=>{const response=await onRequestPatch({env:{DATABASE_URL:'local-only'},params:{id:req.params.id},request:new Request('http://localhost/api/listings',{method:'PATCH',body:JSON.stringify(req.body)})},listingServices);res.status(response.status).type('application/json').send(await response.text());});
-app.post('/api/listings',async(req,res)=>{const response=await onRequestPost({env:{DATABASE_URL:'local-only'},request:new Request('http://localhost/api/listings',{method:'POST',body:JSON.stringify(req.body)})},listingServices);res.status(response.status).type('application/json').send(await response.text());});
-app.delete('/api/listings/:id',async(req,res)=>{await pg.query('DELETE FROM listings WHERE id=$1',[Number(req.params.id)]);res.json({success:true});});
-app.get(['/api/owner-listings','/api/audit-logs','/api/users'],(_req,res)=>res.json({success:true,data:[]}));
+app.use('/api',createListingsRouter(()=>({DATABASE_URL:'local-only'}),listingServices));
+app.get('/api/audit-logs',async(req,res)=>res.json({success:true,data:(await pg.query('SELECT id,listing_id AS "listingId",action,changed_fields AS "changedFields",user_name AS "userName",timestamp FROM listing_audit_logs WHERE ($1::int IS NULL OR listing_id=$1) ORDER BY id DESC',[req.query.listingId?Number(req.query.listingId):null])).rows}));
+app.get(['/api/owner-listings','/api/users'],(_req,res)=>res.json({success:true,data:[]}));
 // Explicit envDir prevents Vite loading the application's production .env into this preview.
 const vite=await createServer({envDir:'.server/preview-empty-env',server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);
 const previewPort = Number(process.env.PREVIEW_PORT || 4176);

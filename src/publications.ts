@@ -10,6 +10,7 @@ export interface PublicationInput {
   notes?: string | null;
 }
 export interface ListingPublication extends PublicationInput {
+  version: number;
   id: number;
   listingId: number;
   label: string | null;

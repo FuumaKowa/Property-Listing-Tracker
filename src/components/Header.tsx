@@ -15,6 +15,7 @@ import { exportToCSV, parseCSVToListings, resetListings } from '../utils/storage
 import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
+  onOpenArchive?:()=>void;
   ownerMode?: boolean;
   onOpenPublicationChannels?: () => void;
   listings: PropertyListing[];
@@ -32,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   listings,
   ownerMode = false,
   onOpenPublicationChannels,
+  onOpenArchive,
   showKPIMetrics,
   onToggleKPIMetrics,
   onOpenAddModal,
@@ -108,6 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end sm:gap-2.5">
         <button className="ui-button" onClick={onOpenPublicationChannels}>Publication channels</button>
+        <button className="ui-button" onClick={onOpenArchive}>Archived properties</button>
         {/* Main Action buttons */}
         <button
           onClick={onOpenAddModal}

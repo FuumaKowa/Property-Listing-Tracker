@@ -7,6 +7,8 @@ import { OWNER_SHEET } from './ownerListing';
 import { OwnerListingSheet } from './components/OwnerListingSheet';
 import { PropertyDetailsModal } from './components/Modals/PropertyDetailsModal';
 import { PublicationChannelsModal } from './components/Modals/PublicationChannelsModal';
+import { ArchiveModal } from './components/Modals/ArchiveModal';
+import { ModalFrame } from './components/Modals/ModalFrame';
 import { Header } from './components/Header';
 import { KPIMetrics } from './components/KPIMetrics';
 import { MasterPropertyGrid } from './components/MasterPropertyGrid';
@@ -57,6 +59,11 @@ function Workspace() {
   const [showKPIMetrics, setShowKPIMetrics] = useState<boolean>(false);
 
   // Modal States
+  const [showArchive,setShowArchive]=useState(false);
+  const [archiveSelection,setArchiveSelection]=useState<PropertyListing[]>([]);
+  const [archiving,setArchiving]=useState(false);
+  const [workspaceError,setWorkspaceError]=useState('');
+  const listingsRef=useRef(listings);listingsRef.current=listings;
   const [detailId, setDetailId] = useState<number | null>(null);
   const [showChannels, setShowChannels] = useState(false);
   const [publicationVersion, setPublicationVersion] = useState(0);
@@ -68,60 +75,32 @@ function Workspace() {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [auditListingTarget, setAuditListingTarget] = useState<{ id?: number; property?: string }>({});
 
-  const persistExpiryChanges = useCallback(async (before: PropertyListing[], after: PropertyListing[]) => {
-    await Promise.all(
-      after
-        .filter((listing) => {
-          const previous = before.find((item) => item.id === listing.id);
-          return previous && (previous.status !== listing.status || previous.renewStatus !== listing.renewStatus);
-        })
-        .map((listing) => updateListingInCloudSql(listing.id, {
-          status: listing.status,
-          renewStatus: listing.renewStatus,
-          updatedByName: userName,
-        }, token, userName, undefined).catch((error) => console.warn('Expiry sync warning:', error)))
-    );
-  }, [token, userName]);
-
-  const refreshListings = useCallback(async () => {
-    setIsDbLoaded(false);
-    setIsRefreshing(true);
-    try {
-      const dbListings = await fetchListingsFromCloudSql();
-      const { updatedListings } = autoExpireListings(dbListings || []);
-      await persistExpiryChanges(dbListings || [], updatedListings);
-      setListings(updatedListings);
-      saveListings(updatedListings);
-    } catch (err) {
-      console.warn('Could not load listings from Cloud SQL:', err);
-    } finally {
-      setIsDbLoaded(true);
-      setIsRefreshing(false);
-    }
-  }, [persistExpiryChanges]);
-
-  // Initial load from Cloud SQL
-  useEffect(() => {
-    void refreshListings();
-  }, [refreshListings]);
-
-  // Periodic automatic date check: ensures status is synchronized with listing date (Active if not passed, Expired if passed)
-  useEffect(() => {
-    const checkDateSync = () => {
-      setListings((prev) => {
-        const { updatedListings, changedCount } = autoExpireListings(prev);
-        if (changedCount > 0) {
-          void persistExpiryChanges(prev, updatedListings);
-          return updatedListings;
-        }
-        return prev;
-      });
-    };
-
-    checkDateSync();
-    const interval = setInterval(checkDateSync, 15000);
-    return () => clearInterval(interval);
-  }, [persistExpiryChanges]);
+  const synchronizeExpiry = useCallback(async (rows:PropertyListing[]) => {
+    const {updatedListings}=autoExpireListings(rows);
+    return Promise.all(updatedListings.map(async (row)=>{
+      const old=rows.find(item=>item.id===row.id)!;
+      if(row.status===old.status&&row.renewStatus===old.renewStatus)return old;
+      try{return await updateListingInCloudSql(row.id,{status:row.status,renewStatus:row.renewStatus,version:old.version},token,userName);}
+      catch{return old;} // Never display an unsaved automatic change or retry with a newer version.
+    }));
+  },[userName]);
+  const refreshListings=useCallback(async()=>{
+    setIsRefreshing(true);setWorkspaceError('');
+    try{setListings(await synchronizeExpiry(await fetchListingsFromCloudSql()));}
+    catch(e){setWorkspaceError((e as Error).message);}
+    finally{setIsDbLoaded(true);setIsRefreshing(false);}
+  },[synchronizeExpiry]);
+  useEffect(()=>{void refreshListings();},[refreshListings]);
+  useEffect(()=>{
+    let running=false,cancelled=false;
+    const timer=setInterval(async()=>{
+      if(running)return;running=true;
+      try{const before=listingsRef.current;const after=await synchronizeExpiry(before);if(!cancelled)setListings(current=>current.map(row=>{
+        const saved=after.find(item=>item.id===row.id);return saved&&(saved.version||0)>(row.version||0)?saved:row;
+      }));}finally{running=false;}
+    },15000);
+    return()=>{cancelled=true;clearInterval(timer);};
+  },[synchronizeExpiry]);
 
   // Sync to local storage on changes
   useEffect(() => {
@@ -168,7 +147,8 @@ function Workspace() {
     if (original) {
       const fields = ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'] as const;
       const changes = Object.fromEntries(fields.filter(key => checked[key] !== original[key]).map(key => [key, checked[key]]));
-      saved = await updateListingInCloudSql(original.id, changes, token, userName);
+      if (Object.keys(changes).length === 0) return;
+      saved = await updateListingInCloudSql(original.id, {...changes,version:original.version}, token, userName);
       setListings(prev => prev.map(row => row.id === saved.id ? saved : row));
     } else {
       const {id, ...input} = checked;
@@ -177,120 +157,35 @@ function Workspace() {
     }
   };
 
-  const handleDeleteListing = async (id: number) => {
-    if (!window.confirm('Delete this property listing?')) return;
-    try { await deleteListingFromCloudSql(id, token, userName); setListings(prev => prev.filter(row => row.id !== id)); }
-    catch { alert('The listing could not be deleted. Please try again.'); }
+  const handleDeleteListing=async(id:number)=>{
+    const row=listings.find(p=>p.id===id);if(row)setArchiveSelection([row]);
   };
 
-  const handleToggleRenewStatus = async (id: number) => {
-    const current = listings.find((l) => l.id === id);
-    if (!current) return;
-
-    let nextRenew: RenewStatus = 'Renewed';
-    if (current.renewStatus === 'Renewed') {
-      nextRenew = 'Want to be renew';
-    } else if (current.renewStatus === 'Want to be renew') {
-      nextRenew = 'Not Renewed';
-    } else {
-      nextRenew = 'Renewed';
-    }
-
-    const datePassed = isDatePassed(current.date);
-    const nextStatus = current.status === 'Sold Out' || current.status === 'Pending' ? current.status : datePassed ? 'Expired' : nextRenew === 'Renewed' ? 'Active' : current.status;
-    const nowIso = new Date().toISOString();
-
-    setListings((prev) =>
-      prev.map((l) =>
-        l.id === id
-          ? {
-              ...l,
-              renewStatus: nextRenew,
-              status: nextStatus,
-              updatedByName: userName || 'Team Member',
-              updatedByEmail: undefined,
-              lastUpdatedAt: nowIso,
-            }
-          : l
-      )
-    );
-
-    try {
-      await updateListingInCloudSql(
-        id,
-        {
-          renewStatus: nextRenew,
-          status: nextStatus,
-          updatedByName: userName || 'Team Member',
-          updatedByEmail: undefined,
-          lastUpdatedAt: nowIso,
-        },
-        token,
-        userName,
-        undefined
-      );
-    } catch (err) {
-      console.warn('Cloud SQL update renewal warning:', err);
-    }
-  };
-
-  const handleToggleStatus = async (id: number) => {
-    const current = listings.find((l) => l.id === id);
-    if (!current) return;
-    const nextStatus = current.status === 'Active' ? 'Expired' : 'Active';
-    const nowIso = new Date().toISOString();
-
-    setListings((prev) =>
-      prev.map((l) =>
-        l.id === id
-          ? {
-              ...l,
-              status: nextStatus,
-              updatedByName: userName || 'Team Member',
-              updatedByEmail: undefined,
-              lastUpdatedAt: nowIso,
-            }
-          : l
-      )
-    );
-
-    try {
-      await updateListingInCloudSql(
-        id,
-        {
-          status: nextStatus,
-          updatedByName: userName || 'Team Member',
-          updatedByEmail: undefined,
-          lastUpdatedAt: nowIso,
-        },
-        token,
-        userName,
-        undefined
-      );
-    } catch (err) {
-      console.warn('Cloud SQL toggle status warning:', err);
-    }
-  };
-
-  const handleUpdateField = async (id: number, field: keyof PropertyListing, value: string | boolean) => {
+  const handleUpdateField = async (id: number, field: keyof PropertyListing, value: string | boolean, version?:number) => {
     const current=listings.find(row=>row.id===id); if(!current)return;
-    const patch:Partial<PropertyListing>={[field]:value};
+    const patch:Partial<PropertyListing>={[field]:value,version:version??current.version};
     if(field==='date' && typeof value === 'string') { const checked=evaluateListingExpiry({...current,date:value}); if(checked.status!==current.status)patch.status=checked.status;if(checked.renewStatus!==current.renewStatus)patch.renewStatus=checked.renewStatus; }
     try { const saved=await updateListingInCloudSql(id,patch,token,userName);setListings(prev=>prev.map(row=>row.id===id?saved:row)); }
-    catch { throw new Error('The change could not be saved. Please try again.'); }
+    catch(e) { throw e; }
   };
 
   const handleBatchUpdate = async (ids:number[],updates:Partial<PropertyListing>) => {
-    const results=await Promise.allSettled(ids.map(id=>updateListingInCloudSql(id,updates,token,userName)));
+    const results=await Promise.allSettled(ids.map(id=>updateListingInCloudSql(id,{...updates,version:listings.find(p=>p.id===id)?.version},token,userName)));
     const saved=results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
     setListings(prev=>prev.map(row=>saved.find(item=>item.id===row.id)||row));
     if(results.some(result=>result.status==='rejected'))alert('Some changes could not be saved. Refresh and try again.');
   };
   const handleBatchDelete = async (ids:number[]) => {
-    const results=await Promise.allSettled(ids.map(async id=>{await deleteListingFromCloudSql(id,token,userName);return id;}));
+    setArchiveSelection(listings.filter(row=>ids.includes(row.id)));
+  };
+  const confirmArchive=async()=>{
+    setArchiving(true);setWorkspaceError('');
+    const results=await Promise.allSettled(archiveSelection.map(async row=>{await deleteListingFromCloudSql(row.id,token,userName,row.version);return row.id;}));
     const removed=results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
     setListings(prev=>prev.filter(row=>!removed.includes(row.id)));
-    if(results.some(result=>result.status==='rejected'))alert('Some listings could not be deleted. Please try again.');
+    const failed=results.find(result=>result.status==='rejected');
+    if(failed?.status==='rejected')setWorkspaceError(failed.reason.message||'Some properties could not be archived. Refresh and review them.');
+    setArchiving(false);setArchiveSelection([]);
   };
 
   const nextAvailableId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
@@ -302,6 +197,7 @@ function Workspace() {
       <Header
         ownerMode={activeSheet === OWNER_SHEET}
         onOpenPublicationChannels={() => setShowChannels(true)}
+        onOpenArchive={()=>setShowArchive(true)}
         listings={sheetListings}
         showKPIMetrics={showKPIMetrics}
         onToggleKPIMetrics={() => setShowKPIMetrics((prev) => !prev)}
@@ -347,6 +243,7 @@ function Workspace() {
         ))}
       </nav>
 
+      {workspaceError&&<p role="alert" className="px-4 py-2 bg-rose-50 text-rose-700">{workspaceError} <button className="underline" onClick={refreshListings}>Refresh listings</button></p>}
       {/* 2. Optional Top KPI Metric Highlights */}
       {showKPIMetrics && activeSheet !== OWNER_SHEET && (
         <KPIMetrics
@@ -370,8 +267,6 @@ function Workspace() {
             setIsAddEditOpen(true);
           }}
           onDeleteListing={handleDeleteListing}
-          onToggleRenewStatus={handleToggleRenewStatus}
-          onToggleStatus={handleToggleStatus}
           onUpdateField={handleUpdateField}
           onBatchUpdate={handleBatchUpdate}
           onBatchDelete={handleBatchDelete}
@@ -385,6 +280,11 @@ function Workspace() {
       </main>
 
       {detailId !== null && listings.find(row => row.id === detailId) && <PropertyDetailsModal key={detailId} listing={listings.find(row => row.id === detailId)!} onClose={() => setDetailId(null)} onEditListing={item => {setEditingListing(item);setIsAddEditOpen(true);}} onChanged={() => setPublicationVersion(n => n + 1)}/>}
+      {showArchive&&<ArchiveModal onClose={()=>setShowArchive(false)} onRestored={refreshListings}/>}
+      {archiveSelection.length>0&&<ModalFrame title="Archive properties?" subtitle="Their details, published ads and history will be retained." onClose={()=>{if(!archiving)setArchiveSelection([]);}}>
+        <p className="mb-4">Archive {archiveSelection.length===1?archiveSelection[0].property:`${archiveSelection.length} selected properties`}? You can restore them from Archived properties.</p>
+        <div className="flex justify-end gap-2"><button className="ui-button" disabled={archiving} onClick={()=>setArchiveSelection([])}>Cancel</button><button className="ui-button bg-indigo-600 text-white" disabled={archiving} onClick={confirmArchive}>{archiving?'Archiving…':'Confirm archive'}</button></div>
+      </ModalFrame>}
       {showChannels && <PublicationChannelsModal onClose={() => setShowChannels(false)} onChanged={() => setPublicationVersion(n => n + 1)}/>}
       {/* MODALS */}
       {/* 1. Add / Edit Listing Modal */}

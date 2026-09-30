@@ -1,3 +1,4 @@
+import {mutatePublication} from './_publication-mutations';
 import { getSessionUser, type AuthEnv, type AuthUser } from "./_auth";
 import { getDb, json } from "./_db";
 import {
@@ -27,7 +28,7 @@ const defaults: PublicationsServices = {
 };
 const channelColumns = 'id, name, archived_at AS "archivedAt"';
 const publicationColumns =
-  'id, listing_id AS "listingId", channel_id AS "channelId", url, label, notes';
+  'id, version, listing_id AS "listingId", channel_id AS "channelId", url, label, notes';
 const error = (message: string, status: number) =>
   json({ success: false, error: message }, status);
 const success = (data: unknown, status = 200) =>
@@ -47,7 +48,7 @@ export async function handlePublications(
     if (!user) return error("Authentication required.", 401);
     const method = request.method;
     const db = services.connect(env);
-    const body = ["POST", "PATCH"].includes(method)
+    const body = (["POST", "PATCH"].includes(method) || (resource === "publications" && method === "DELETE"))
       ? objectInput(await request.json())
       : {};
     if (resource === "channels") {
@@ -108,45 +109,9 @@ export async function handlePublications(
             [listingId],
           ),
         );
-      if (method === "POST" && !context.id) {
-        const input = validatePublicationInput(body);
-        const rows = await db.query(
-          `WITH channel AS (SELECT id FROM publication_channels WHERE id=$2 AND archived_at IS NULL FOR UPDATE) INSERT INTO listing_publications(listing_id,channel_id,url,label,notes) SELECT $1,id,$3,$4,$5 FROM channel RETURNING ${publicationColumns}`,
-          [listingId, input.channelId, input.url, input.label, input.notes],
-        );
-        return rows[0]
-          ? success(rows[0], 201)
-          : error("Select an active publication channel.", 400);
-      }
-      if (method === "PATCH" && context.id) {
-        const id = routeId(context.id),
-          input = validatePublicationInput(body);
-        if (
-          !(
-            await db.query(
-              "SELECT id FROM listing_publications WHERE id=$1 AND listing_id=$2",
-              [id, listingId],
-            )
-          )[0]
-        )
-          return error("Advertisement not found.", 404);
-        const rows = await db.query(
-          `WITH channel AS (SELECT id,archived_at FROM publication_channels WHERE id=$3 FOR UPDATE) UPDATE listing_publications p SET channel_id=c.id,url=$4,label=$5,notes=$6,updated_at=now() FROM channel c WHERE p.id=$1 AND p.listing_id=$2 AND (c.archived_at IS NULL OR p.channel_id=c.id) RETURNING p.id, p.listing_id AS "listingId", p.channel_id AS "channelId",p.url,p.label,p.notes`,
-          [id, listingId, input.channelId, input.url, input.label, input.notes],
-        );
-        return rows[0]
-          ? success(rows[0])
-          : error("Select an active publication channel.", 400);
-      }
-      if (method === "DELETE" && context.id) {
-        const rows = await db.query(
-          "DELETE FROM listing_publications WHERE id=$1 AND listing_id=$2 RETURNING id",
-          [routeId(context.id), listingId],
-        );
-        return rows[0]
-          ? success(rows[0])
-          : error("Advertisement not found.", 404);
-      }
+      if ((method==='POST'&&!context.id)||(['PATCH','DELETE'].includes(method)&&context.id))
+        return await mutatePublication(db,user,listingId,context.id?routeId(context.id):undefined,method,body);
+
     }
     return error("Method not allowed.", 405);
   } catch (caught) {

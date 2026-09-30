@@ -18,14 +18,16 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
 }) => {
   const [logs, setLogs] = useState<ListingAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error,setError]=useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setLoading(true);
+      setLoading(true);setError('');
       fetchAuditLogs(listingId)
         .then((data) => {
           setLogs(data);
         })
+        .catch(e=>setError(e.message))
         .finally(() => setLoading(false));
     }
   }, [isOpen, listingId]);
@@ -53,7 +55,12 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
     if (!changedFieldsStr) return null;
     try {
       const obj = JSON.parse(changedFieldsStr);
-      return Object.entries(obj).map(([key, val]) => `${key}: ${String(val)}`).join(', ');
+      if('before' in obj || 'after' in obj){
+        const before=obj.before||{},after=obj.after||{};
+        const hidden=new Set(['id','version','updated_by_user_id','updated_by_name','updated_by_email','last_updated_at','updated_at','created_at']);
+        return [...new Set([...Object.keys(before),...Object.keys(after)])].filter(key=>!hidden.has(key)&&JSON.stringify(before[key])!==JSON.stringify(after[key])).map(key=>key.replaceAll('_',' ')+': '+String(before[key]??'—')+' → '+String(after[key]??'—')).join('\n');
+      }
+      return Object.entries(obj).map(([key,val])=>key+': '+String(val)).join(', ');
     } catch {
       return changedFieldsStr;
     }
@@ -89,7 +96,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
 
         {/* Content list */}
         <div className="p-4 sm:p-6 min-h-0 overflow-y-auto flex-1 divide-y divide-slate-100">
-          {loading ? (
+          {error ? <p role="alert" className="text-rose-700">{error}</p> : loading ? (
             <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
               <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-xs font-medium">Loading audit history from Cloud SQL...</p>
@@ -99,7 +106,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
               <Clock className="w-8 h-8 mx-auto mb-2 text-slate-300" />
               <p className="text-sm font-semibold text-slate-700">No audit records yet</p>
               <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1">
-                Any additions, status updates, or changes made to listings are securely recorded in the cloud database.
+                History starts when tracking is enabled. Earlier edits cannot be reconstructed.
               </p>
             </div>
           ) : (
@@ -130,7 +137,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
                     </div>
 
                     {log.changedFields && (
-                      <p className="text-xs text-slate-600 mt-1 font-mono bg-slate-50 px-2 py-1 rounded border border-slate-200/70 inline-block max-w-md break-all">
+                      <p className="whitespace-pre-wrap text-xs text-slate-600 mt-1 font-mono bg-slate-50 px-2 py-1 rounded border border-slate-200/70 inline-block max-w-md break-all">
                         {parseChanges(log.changedFields)}
                       </p>
                     )}

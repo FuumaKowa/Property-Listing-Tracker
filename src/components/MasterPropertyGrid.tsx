@@ -12,12 +12,11 @@ interface Props {
   onEditListing: (item: PropertyListing) => void;
   onViewListing: (item: PropertyListing) => void;
   onDeleteListing: (id: number) => void;
-  onToggleRenewStatus: (id: number) => void;
-  onToggleStatus?: (id: number) => void;
   onUpdateField?: (
     id: number,
     field: keyof PropertyListing,
     value: string | boolean,
+    version?: number,
   ) => void | Promise<void>;
   onBatchUpdate: (ids: number[], updates: Partial<PropertyListing>) => void;
   onBatchDelete: (ids: number[]) => void;
@@ -49,6 +48,7 @@ export function MasterPropertyGrid({
   const [editing, setEditing] = useState<{
       id: number;
       field: keyof PropertyListing;
+      version?: number;
     } | null>(null),
     [value, setValue] = useState("");
   const [editError, setEditError] = useState('');
@@ -152,8 +152,8 @@ export function MasterPropertyGrid({
     if (!editing || saving.current || cancelled.current) return;
     saving.current = true;
     setEditError('');
-    try { await onUpdateField?.(editing.id, editing.field, value); setEditing(null); }
-    catch { setEditError('Could not save. Your draft is retained; press Enter to retry.'); }
+    try { await onUpdateField?.(editing.id, editing.field, value,editing.version); setEditing(null); }
+    catch(e) { setEditError((e as Error).message+' Your draft is retained.'); }
     finally { saving.current = false; }
   };
   const cell = (
@@ -166,7 +166,7 @@ export function MasterPropertyGrid({
         if (editing || saving.current) return;
         cancelled.current = false;
         setEditError('');
-        setEditing({ id: p.id, field });
+        setEditing({ id: p.id, field, version:p.version });
         setValue(String(p[field] ?? ""));
       }}
       title="Double-click to edit"
@@ -206,7 +206,7 @@ export function MasterPropertyGrid({
     <select
       aria-label={`Status for ${p.property}`}
       value={p.status}
-      onChange={(e) => {Promise.resolve(onUpdateField?.(p.id, "status", e.target.value)).catch(()=>setEditError('Status could not be saved. Please try again.'));}}
+      onChange={(e) => {Promise.resolve(onUpdateField?.(p.id, "status", e.target.value)).catch((e)=>setEditError(e.message));}}
       className={`rounded-full border-0 px-2 py-1 text-xs ${p.status === "Active" ? "bg-emerald-50 text-emerald-700" : p.status === "Expired" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}
     >
       <option>Active</option>
@@ -233,7 +233,7 @@ export function MasterPropertyGrid({
       </button>
       <button
         className="p-2 text-slate-500 hover:text-rose-700"
-        aria-label="Delete listing"
+        aria-label="Archive listing"
         onClick={() => onDeleteListing(p.id)}
       >
         <Trash2 size={15} />
@@ -247,7 +247,7 @@ export function MasterPropertyGrid({
       onClick={async () => {
         setPriorityBusy(ids => [...ids,p.id]);
         try { await onUpdateField?.(p.id,'isPriority',!p.isPriority); }
-        catch { setEditError('Priority could not be saved. Please try again.'); }
+        catch(e) { setEditError((e as Error).message); }
         finally { setPriorityBusy(ids => ids.filter(id => id !== p.id)); }
       }}><Star size={17} fill={p.isPriority ? 'currentColor' : 'none'}/></button>
   );
@@ -403,13 +403,11 @@ export function MasterPropertyGrid({
           <button
             className="ui-button text-rose-700"
             onClick={() => {
-              if (confirm("Delete the selected listings?")) {
                 onBatchDelete(selected);
                 setSelected([]);
-              }
             }}
           >
-            Delete selected
+            Archive selected
           </button>
           <button className="ui-button" onClick={() => setSelected([])}>
             Deselect
@@ -503,7 +501,7 @@ export function MasterPropertyGrid({
                     aria-label={`Renewal for ${p.property}`}
                     value={p.renewStatus}
                     onChange={(e) =>
-                        Promise.resolve(onUpdateField?.(p.id, "renewStatus", e.target.value)).catch(()=>setEditError('Renewal could not be saved. Please try again.'))
+                        Promise.resolve(onUpdateField?.(p.id, "renewStatus", e.target.value)).catch((e)=>setEditError(e.message))
                     }
                     className="rounded border border-slate-200 px-2 py-1"
                   >

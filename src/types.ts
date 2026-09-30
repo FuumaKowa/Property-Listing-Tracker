@@ -20,6 +20,9 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
 ];
 
 export interface PropertyListing {
+  version?: number;
+  archivedAt?: string | null;
+  archivedByName?: string | null;
   id: number;
   property: string;
   projectCategory?: ProjectCategory;

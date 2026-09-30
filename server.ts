@@ -2,13 +2,8 @@ import express, { type Request, type Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import {
-  getAllListingsFromDb,
-  createListingInDb,
-  updateListingInDb,
-  deleteListingFromDb,
-  getAuditLogs,
-} from './src/db/listings.ts';
+import {onRequestGet as readAudit} from './functions/api/audit-logs';
+import {createListingsRouter} from './src/server/listings';
 
 import { getSessionUser } from './functions/api/_auth.ts';
 import { handleOwnerListings } from './functions/api/_owner-listings.ts';
@@ -30,63 +25,8 @@ app.use('/api/integrations/n8n/owner-listings', createN8nRouter(
 app.use(express.json({ limit: '10mb' }));
 app.use('/api', createPublicationsRouter(() => ({ DATABASE_URL: process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '' })));
 
-function userInfo(req: Request) {
-  return {
-    name: (req.headers['x-user-name'] as string) || req.body?.updatedByName || 'Team Member',
-    email: (req.headers['x-user-email'] as string) || req.body?.updatedByEmail || undefined,
-  };
-}
-
-app.get('/api/listings', async (_req: Request, res: Response) => {
-  try {
-    res.json({ success: true, data: await getAllListingsFromDb() });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to load listings' });
-  }
-});
-
-app.post('/api/listings', async (req: Request, res: Response) => {
-  try {
-    const user = await getSessionUser(new Request('http://localhost/api/listings', {
-      headers: { Cookie: req.headers.cookie || '' },
-    }), {DATABASE_URL: process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || ''});
-    if (!user) return res.status(401).json({success:false,error:'Unauthorized'});
-    res.status(201).json({success:true,data:await createListingInDb(req.body, {
-      uid: String(user.id), name: user.displayName || user.username,
-    })});
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to create listing' });
-  }
-});
-
-app.patch('/api/listings/:id', async (req: Request, res: Response) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid listing ID' });
-    res.json({ success: true, data: await updateListingInDb(id, req.body, userInfo(req)) });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to update listing' });
-  }
-});
-
-app.delete('/api/listings/:id', async (req: Request, res: Response) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid listing ID' });
-    res.json(await deleteListingFromDb(id));
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to delete listing' });
-  }
-});
-
-app.get('/api/audit-logs', async (req: Request, res: Response) => {
-  try {
-    const listingId = req.query.listingId ? Number(req.query.listingId) : undefined;
-    res.json({ success: true, data: await getAuditLogs(listingId) });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to load audit logs' });
-  }
-});
+app.use('/api', createListingsRouter(() => ({DATABASE_URL:process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || ''})));
+app.get('/api/audit-logs',async(req,res)=>{const response=await readAudit({env:{DATABASE_URL:process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || ''},request:new Request('http://localhost'+req.originalUrl,{headers:{Cookie:req.headers.cookie || ''}})});res.status(response.status).type('application/json').send(await response.text());});
 
 // Use the same authenticated owner API in local/Node and Cloudflare deployments.
 app.all(['/api/owner-listings', '/api/owner-listings/:id'], async (req: Request, res: Response) => {

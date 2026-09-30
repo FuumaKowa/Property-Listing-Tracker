@@ -24,25 +24,22 @@ export async function fetchListingsFromCloudSql(token?: string | null): Promise<
       headers: getHeaders(token),
     });
     if (res.status === 401 || res.status === 403) {
-      return [];
+      throw new Error('Please sign in again.');
     }
     if (!res.ok) {
-      console.warn(`API /api/listings returned status ${res.status}: ${res.statusText}`);
-      return [];
+      throw new Error('Unable to load listings. Please try again.');
     }
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      console.warn(`API returned non-JSON content type: ${contentType}`);
-      return [];
+      throw new Error('Unable to load listings. Please refresh and try again.');
     }
     const json = await res.json();
-    if (json && Array.isArray(json.data) && json.data.length > 0) {
+    if (json && Array.isArray(json.data)) {
       return json.data;
     }
-    return [];
+    throw new Error('Unable to load listings. Please refresh and try again.');
   } catch (error) {
-    console.warn('fetchListingsFromCloudSql error:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -93,7 +90,7 @@ export async function updateListingInCloudSql(
       }),
     });
     if (!res.ok) {
-      throw new Error(`Failed to update listing: ${res.statusText}`);
+      const failure=await res.json().catch(()=>({})); throw new Error(failure.error || 'Unable to save changes. Please try again.');
     }
     const json = await res.json();
     return json.data;
@@ -107,15 +104,17 @@ export async function updateListingInCloudSql(
 export async function deleteListingFromCloudSql(
   id: number,
   token?: string | null,
-  userName?: string
+  userName?: string,
+  version?: number
 ): Promise<void> {
   try {
     const res = await fetch(`/api/listings/${id}`, {
       method: 'DELETE',
       headers: getHeaders(token, userName),
+      body: JSON.stringify({version}),
     });
     if (!res.ok) {
-      throw new Error(`Failed to delete listing: ${res.statusText}`);
+      const failure=await res.json().catch(()=>({})); throw new Error(failure.error || 'Unable to archive property.');
     }
   } catch (error) {
     console.error('deleteListingFromCloudSql error:', error);
@@ -134,8 +133,14 @@ export async function fetchAuditLogs(listingId?: number): Promise<ListingAuditEn
     const json = await res.json();
     return json.data || [];
   } catch (error) {
-    console.error('fetchAuditLogs error:', error);
-    return [];
+    throw error;
   }
 }
 
+
+export async function fetchArchivedListings():Promise<PropertyListing[]> {
+ const response=await fetch('/api/listings?archived=true');const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to load archive.');return result.data;
+}
+export async function restoreListing(id:number,version?:number):Promise<PropertyListing> {
+ const response=await fetch('/api/listings/'+id+'/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version})});const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to restore property.');return result.data;
+}
