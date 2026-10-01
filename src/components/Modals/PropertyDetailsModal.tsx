@@ -1,3 +1,4 @@
+import {PublicationReportExport} from '../PublicationReportExport';
 import {DataWarnings} from '../DailyWork';
 import type {WarningKey} from '../../utils/dailyWork';
 import React, { useEffect, useState } from "react";
@@ -126,6 +127,7 @@ export function PropertyDetailsModal({
           Schedule tracking only; no automatic posting.
         </p>
       </section>
+      {!loading&&!error&&<PublicationReportExport listing={listing} links={links} channels={channels}/>}
       {loading ? (
         <p role="status">Loading published ads…</p>
       ) : error ? (
