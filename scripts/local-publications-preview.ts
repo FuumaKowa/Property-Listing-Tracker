@@ -13,6 +13,7 @@ await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NUL
 await pg.exec(readFileSync('drizzle/0001_publication_channels.sql','utf8'));
 await pg.exec(readFileSync('drizzle/0002_listing_creator_priority.sql','utf8'));
 await pg.exec(readFileSync('drizzle/0003_listing_safety.sql','utf8'));
+await pg.exec(readFileSync('drizzle/0004_daily_work.sql','utf8'));
 await pg.exec('CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer REFERENCES listings(id),action text,changed_fields text,user_uid text,user_name text,user_email text,timestamp timestamp DEFAULT now())');
 await pg.exec(`INSERT INTO listings(property,project_category,location,tenure,pm,negotiator,agent,no_tel,available_units,status,date,renew_status,notes,updated_by_name) VALUES
 ('The Maple Residences','Project Marketing (PM)','Taman Desa, KL','Freehold','Daniel (sample)','Aina (sample)','Legacy contact','Not captured','6','Active','2099-10-18','Want to be renew','Corner unit with a balcony. Fictional preview record.','Preview'),
@@ -20,6 +21,7 @@ await pg.exec(`INSERT INTO listings(property,project_category,location,tenure,pm
 ('Lakeview Suites','Rental','Cyberjaya','Leasehold','Daniel (sample)','Mei (sample)',NULL,'Not captured','2','Expired','2020-09-20','In Progress','Fully furnished. Sample record.','Preview');
 UPDATE listings SET property_guru_repost_date='2099-10-11',property_guru_repost_mode='Auto' WHERE id=1;
 INSERT INTO listing_publications(listing_id,channel_id,url,label) VALUES (1,1,'https://example.com/propertyguru/maple','Main advertisement'),(1,2,'https://example.com/mudah/maple','Mudah listing'),(1,3,'https://example.com/telegram/1','September feature'),(1,3,'https://example.com/telegram/2','Viewing announcement'),(1,4,'https://example.com/tiktok/maple','Walkthrough video');`);
+await pg.exec(`UPDATE listings SET created_by_user_id='1',created_by_name='Local preview · sample data',is_priority=true WHERE id IN(1,3);UPDATE listings SET date=(CURRENT_DATE+3)::text,property_guru_repost_date=CURRENT_DATE-1 WHERE id=1;UPDATE listings SET date='23.10' WHERE id=3;`);
 const user={id:1,username:'preview',displayName:'Local preview Â· sample data',role:'super_admin' as const};
 const app=express();app.use(express.json());
 let failNextSave=false;

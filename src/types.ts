@@ -20,6 +20,7 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
 ];
 
 export interface PropertyListing {
+  ignoredDataWarnings?: string[];
   version?: number;
   archivedAt?: string | null;
   archivedByName?: string | null;

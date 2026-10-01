@@ -22,6 +22,7 @@ try {
   await pg.exec("CREATE TABLE listings(id serial PRIMARY KEY,property text); INSERT INTO listings(property) VALUES ('Keep this'),('Other'); CREATE TABLE owner_listings(id serial PRIMARY KEY,property_name text); INSERT INTO owner_listings(property_name) VALUES ('Keep owner')");
   await pg.exec(readFileSync('drizzle/0001_publication_channels.sql','utf8'));
   await pg.exec(readFileSync('drizzle/0003_listing_safety.sql','utf8'));
+await pg.exec(readFileSync('drizzle/0004_daily_work.sql','utf8'));
   await pg.exec('CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer REFERENCES listings(id),action text,changed_fields text,user_uid text,user_name text)');
   const before=(await pg.query('SELECT * FROM listings ORDER BY id')).rows;
   const existing=(await pg.query("INSERT INTO listing_publications(listing_id,channel_id,url,label,notes) VALUES(1,3,'https://t.me/test/old','Keep label','Keep notes') RETURNING *")).rows[0];

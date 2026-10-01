@@ -19,6 +19,7 @@ try {
   await pg.exec(readFileSync('drizzle/0001_publication_channels.sql','utf8'));
   await pg.exec("CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer NOT NULL REFERENCES listings(id),action text,changed_fields text,user_uid text,user_name text,timestamp timestamp DEFAULT now())");
   await pg.exec(readFileSync('drizzle/0003_listing_safety.sql','utf8'));
+await pg.exec(readFileSync('drizzle/0004_daily_work.sql','utf8'));
   const before = (await pg.query('SELECT * FROM listings ORDER BY id')).rows;
   authenticated = false;
   assert.equal((await call('channels')).status, 401); assert.equal(connections, 0);

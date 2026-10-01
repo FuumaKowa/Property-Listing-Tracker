@@ -27,6 +27,7 @@ try {
  assert.equal(legacy.created_by_name,null);assert.equal(legacy.is_priority,false);
  await pg.exec("CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer,action text,changed_fields text,user_uid text,user_name text,timestamp timestamp DEFAULT now())");
  await pg.exec(readFileSync('drizzle/0003_listing_safety.sql','utf8'));
+await pg.exec(readFileSync('drizzle/0004_daily_work.sql','utf8'));
  const services:any={getSessionUser:async()=>({id:7,username:'creator',displayName:'Original Creator',role:'user'}),getDb:()=>({query:async(sql:string,params:unknown[])=>(await pg.query(sql,params)).rows})};
  const {onRequestPost}=await import('../functions/api/listings');
  const {onRequestPatch}=await import('../functions/api/listings/[id]');

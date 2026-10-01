@@ -43,6 +43,7 @@ export const listings = pgTable('listings', {
   archivedByName: text('archived_by_name'),
   createdByUserId: text('created_by_user_id'),
   createdByName: text('created_by_name'),
+  ignoredDataWarnings: jsonb('ignored_data_warnings').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   isPriority: boolean('is_priority').notNull().default(false),
   negotiator: text('negotiator'),
   agent: text('agent'),

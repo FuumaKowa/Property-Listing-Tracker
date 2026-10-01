@@ -21,7 +21,8 @@
     "test:ownership": "tsx scripts/listing-ownership-check.ts",
     "test:safety": "tsx scripts/listing-safety-check.ts",
     "test:report-import": "tsx scripts/report-import-check.ts && tsx scripts/report-import-api-check.ts",
-    "test:dates": "tsx scripts/date-format-check.ts"
+    "test:dates": "tsx scripts/date-format-check.ts",
+    "test:daily-work": "tsx scripts/daily-work-check.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

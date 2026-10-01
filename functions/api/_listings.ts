@@ -1,9 +1,10 @@
+import {validateIgnoredWarnings} from '../../src/utils/dailyWork';
 import {getDb,json,listingColumns} from './_db';
 import {getSessionUser,type AuthEnv} from './_auth';
 import {objectInput,PublicationValidationError,validateRepostFields} from '../../src/publications';
 import {validatePriority} from '../../src/utils/listingPresentation';
 
-export const listingFields:Record<string,string>={property:'property',projectCategory:'project_category',location:'location',tenure:'tenure',pm:'pm',negotiator:'negotiator',agent:'agent',noTel:'no_tel',availableUnits:'available_units',status:'status',date:'date',renewStatus:'renew_status',notes:'notes',propertyGuruRepostDate:'property_guru_repost_date',propertyGuruRepostMode:'property_guru_repost_mode',isPriority:'is_priority'};
+export const listingFields:Record<string,string>={property:'property',projectCategory:'project_category',location:'location',tenure:'tenure',pm:'pm',negotiator:'negotiator',agent:'agent',noTel:'no_tel',availableUnits:'available_units',status:'status',date:'date',renewStatus:'renew_status',notes:'notes',propertyGuruRepostDate:'property_guru_repost_date',propertyGuruRepostMode:'property_guru_repost_mode',isPriority:'is_priority',ignoredDataWarnings:'ignored_data_warnings'};
 export type ListingServices={getDb:typeof getDb;getSessionUser:typeof getSessionUser};
 type Context={env:AuthEnv;request:Request;id?:string;restore?:boolean};
 const fail=(error:string,status:number)=>json({success:false,error},status);
@@ -60,6 +61,7 @@ export async function handleListings({env,request,id,restore=false}:Context,serv
 }
 function validated(body:Record<string,unknown>){
  const input:Record<string,unknown>={...validateRepostFields(body),...validatePriority(body)};
+ if('ignoredDataWarnings' in body)input.ignoredDataWarnings=JSON.stringify(validateIgnoredWarnings(body.ignoredDataWarnings));
  for(const key of Object.keys(listingFields)){
   if(!(key in body)||key in input)continue;
   if(typeof body[key]!=='string')throw new PublicationValidationError(`${key} must be text.`);

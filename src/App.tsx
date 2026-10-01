@@ -1,3 +1,5 @@
+import {DailyWork} from './components/DailyWork';
+import type {WarningKey} from './utils/dailyWork';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { PropertyListing, FilterState, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from './types';
@@ -188,6 +190,13 @@ function Workspace() {
     setArchiving(false);setArchiveSelection([]);
   };
 
+  const handleIgnoreWarning=async(row:PropertyListing,key:WarningKey,ignore:boolean)=>{
+    const current=row.ignoredDataWarnings||[];
+    const ignoredDataWarnings=ignore?[...new Set([...current,key])]:current.filter(k=>k!==key);
+    const saved=await updateListingInCloudSql(row.id,{ignoredDataWarnings,version:row.version});
+    setListings(prev=>prev.map(item=>item.id===saved.id?saved:item));
+  };
+
   const nextAvailableId = listings.length > 0 ? Math.max(...listings.map((l) => l.id)) + 1 : 1;
   const nextDisplayNumber = sheetListings.length + 1;
 
@@ -244,6 +253,7 @@ function Workspace() {
       </nav>
 
       {workspaceError&&<p role="alert" className="px-4 py-2 bg-rose-50 text-rose-700">{workspaceError} <button className="underline" onClick={refreshListings}>Refresh listings</button></p>}
+      {activeSheet!==OWNER_SHEET&&user&&<DailyWork listings={listings} user={user} onOpen={setDetailId} publicationVersion={publicationVersion} onIgnore={handleIgnoreWarning}/>}
       {/* 2. Optional Top KPI Metric Highlights */}
       {showKPIMetrics && activeSheet !== OWNER_SHEET && (
         <KPIMetrics
@@ -279,7 +289,7 @@ function Workspace() {
 
       </main>
 
-      {detailId !== null && listings.find(row => row.id === detailId) && <PropertyDetailsModal key={detailId} listing={listings.find(row => row.id === detailId)!} onClose={() => setDetailId(null)} onEditListing={item => {setEditingListing(item);setIsAddEditOpen(true);}} onChanged={() => setPublicationVersion(n => n + 1)}/>}
+      {detailId !== null && listings.find(row => row.id === detailId) && <PropertyDetailsModal onIgnore={handleIgnoreWarning} key={detailId} listing={listings.find(row => row.id === detailId)!} onClose={() => setDetailId(null)} onEditListing={item => {setEditingListing(item);setIsAddEditOpen(true);}} onChanged={() => setPublicationVersion(n => n + 1)}/>}
       {showArchive&&<ArchiveModal onClose={()=>setShowArchive(false)} onRestored={refreshListings}/>}
       {archiveSelection.length>0&&<ModalFrame title="Archive properties?" subtitle="Their details, published ads and history will be retained." onClose={()=>{if(!archiving)setArchiveSelection([]);}}>
         <p className="mb-4">Archive {archiveSelection.length===1?archiveSelection[0].property:`${archiveSelection.length} selected properties`}? You can restore them from Archived properties.</p>

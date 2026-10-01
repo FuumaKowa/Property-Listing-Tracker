@@ -12,7 +12,7 @@ try {
  CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer NOT NULL REFERENCES listings(id) ON DELETE CASCADE,action text NOT NULL,changed_fields text,user_name text,user_uid text,user_email text,timestamp timestamp DEFAULT now());
  CREATE TABLE owner_listings(id serial PRIMARY KEY,property_name text);INSERT INTO owner_listings(property_name) VALUES('Preserved owner');
  INSERT INTO listings(property,location,pm) VALUES('Legacy','KL','Old PM');`);
- for(const file of ['0001_publication_channels','0002_listing_creator_priority','0003_listing_safety'])await pg.exec(readFileSync(`drizzle/${file}.sql`,'utf8'));
+ for(const file of ['0001_publication_channels','0002_listing_creator_priority','0003_listing_safety','0004_daily_work'])await pg.exec(readFileSync(`drizzle/${file}.sql`,'utf8'));
  let user:any={id:7,username:'creator',displayName:'Creator',role:'user'};
  const services:any={getSessionUser:async()=>user,getDb:()=>({query:async(sql:string,params:unknown[])=>(await pg.query(sql,params)).rows})};
  const call=async(method:string,body?:unknown,id?:number,restore=false)=>handleListings({env:{DATABASE_URL:'test'},request:new Request('https://test/api/listings',{method,body:body===undefined?undefined:JSON.stringify(body)}),id:id===undefined?undefined:String(id),restore},services);
@@ -43,10 +43,15 @@ try {
   assert.equal(httpConflict.status,409);
   assert.equal((await fetch(origin+'/api/listings/'+created.id,{method:'DELETE',headers:{'Content-Type':'application/json'},body:'{}'})).status,428);
  }finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
+ r=await call('PATCH',{version:5,ignoredDataWarnings:['phone','links']},created.id);assert.equal(r.status,200);assert.deepEqual((await r.json()).data.ignoredDataWarnings,['phone','links']);
+ assert.equal((await call('PATCH',{version:5,ignoredDataWarnings:[]},created.id)).status,409);
+ assert.equal((await call('PATCH',{version:6,ignoredDataWarnings:['unknown']},created.id)).status,400);
+ r=await call('PATCH',{version:6,ignoredDataWarnings:[]},created.id);assert.equal(r.status,200);assert.deepEqual((await r.json()).data.ignoredDataWarnings,[]);
+ assert.equal((await pg.query<any>('SELECT pm,created_by_name FROM listings WHERE id=$1',[created.id])).rows[0].pm,'Updated lister');
  // An audit failure must roll back the listing update.
  await pg.exec("ALTER TABLE listing_audit_logs ADD CONSTRAINT reject_update CHECK(action <> 'update') NOT VALID");
- assert.equal((await call('PATCH',{version:5,pm:'Must roll back'},created.id)).status,500);
- assert.equal((await pg.query<any>('SELECT version,pm FROM listings WHERE id=$1',[created.id])).rows[0].version,5);
+ assert.equal((await call('PATCH',{version:7,pm:'Must roll back'},created.id)).status,500);
+ assert.equal((await pg.query<any>('SELECT version,pm FROM listings WHERE id=$1',[created.id])).rows[0].version,7);
  user=null;assert.equal((await call('GET')).status,401);assert.equal((await call('DELETE',{version:4},created.id)).status,401);
  console.log('PASS atomic audit, before/after values, creator preservation, stale save/archive rejection, required versions, archive/restore with links retained, auth, owner isolation and audit-failure rollback');
 }finally{await pg.close();}

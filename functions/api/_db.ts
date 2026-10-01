@@ -25,6 +25,7 @@ export const listingColumns = `
   created_by_user_id AS "createdByUserId",
   created_by_name AS "createdByName",
   is_priority AS "isPriority",
+  ignored_data_warnings AS "ignoredDataWarnings",
   negotiator,
   agent,
   no_tel AS "noTel",

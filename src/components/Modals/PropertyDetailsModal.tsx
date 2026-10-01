@@ -1,3 +1,5 @@
+import {DataWarnings} from '../DailyWork';
+import type {WarningKey} from '../../utils/dailyWork';
 import React, { useEffect, useState } from "react";
 import { creatorLabel } from '../../utils/listingPresentation';
 import type { PropertyListing } from "../../types";
@@ -17,11 +19,13 @@ export function PropertyDetailsModal({
   onClose,
   onEditListing,
   onChanged,
+  onIgnore,
 }: {
   listing: PropertyListing;
   onClose: () => void;
   onEditListing: (listing: PropertyListing) => void;
   onChanged: () => void;
+  onIgnore: (row:PropertyListing,key:WarningKey,ignore:boolean)=>Promise<void>;
 }) {
   const [links, setLinks] = useState<ListingPublication[]>([]),
     [channels, setChannels] = useState<PublicationChannel[]>([]),
@@ -148,6 +152,7 @@ export function PropertyDetailsModal({
           }}
         />
       )}
+      <DataWarnings listing={listing} count={loading||error?undefined:links.length} onIgnore={onIgnore}/>
       <section className="mt-6 border-t border-slate-100 pt-6">
         <h3 className="mb-3 font-semibold">Additional information</h3>
         <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
