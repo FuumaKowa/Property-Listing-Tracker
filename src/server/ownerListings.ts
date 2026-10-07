@@ -12,15 +12,18 @@ export function createOwnerListingsRouter(
   router.all(
     [
       "/owner-assignment-settings",
+      "/owner-listings/import",
       "/owner-listings",
       "/owner-listings/:id",
       "/owner-listings/:id/:action",
     ],
     async (req, res) => {
       const action =
-        req.path === "/owner-assignment-settings"
-          ? "settings"
-          : req.params.action;
+        req.path === "/owner-listings/import"
+          ? "import"
+          : req.path === "/owner-assignment-settings"
+            ? "settings"
+            : req.params.action;
       const response = await handleOwnerListings(
         {
           env: env(),

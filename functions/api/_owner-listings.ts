@@ -6,6 +6,7 @@ import {
   readOwnerListings,
 } from "../../src/db/ownerListings";
 import { validateOwnerListing, OWNER_STATUSES } from "../../src/ownerListing";
+import { importOwners } from "./_owner-import";
 
 interface Context {
   env: AuthEnv;
@@ -16,15 +17,32 @@ interface Context {
 export interface OwnerServices {
   authenticate: typeof getSessionUser;
   connect: (env: AuthEnv) => OwnerListingDb;
+  transact?: (
+    env: AuthEnv,
+    statements: { sql: string; params: any[] }[],
+  ) => Promise<Record<string, any>[][]>;
 }
+const defaults: OwnerServices = {
+  authenticate: getSessionUser,
+  connect: getDb,
+  transact: async (env, statements) => {
+    const db = getDb(env);
+    return db.transaction(
+      statements.map((s) => db.query(s.sql, s.params)),
+      { isolationLevel: "ReadCommitted" },
+    );
+  },
+};
 const fail = (error: string, status = 400) => json({ error }, status);
 export async function handleOwnerListings(
   { env, request, params, action }: Context,
-  services: OwnerServices = { authenticate: getSessionUser, connect: getDb },
+  services: OwnerServices = defaults,
 ) {
   try {
     const user = await services.authenticate(request, env);
     if (!user) return authError();
+    if (action === "import")
+      return await importOwners(request, env, services, user);
     const db = services.connect(env),
       method = request.method,
       admin = ["admin", "super_admin"].includes(user.role),

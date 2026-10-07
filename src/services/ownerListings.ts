@@ -1,4 +1,10 @@
 import { OwnerListing, OwnerListingInput } from "../ownerListing";
+import type {
+  OwnerImportRaw,
+  OwnerImportRow,
+  OwnerImportChoice,
+  OwnerImportResult,
+} from "../ownerImport";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/owner-listings${path}`, {
@@ -17,6 +23,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const fetchOwnerListings = () => request<OwnerListing[]>("");
+export const previewOwnerImport = (rows: OwnerImportRaw[]) =>
+  request<{ rows: OwnerImportRow[] }>("/import", {
+    method: "POST",
+    body: JSON.stringify({ mode: "preview", rows }),
+  });
+export const commitOwnerImport = (
+  rows: OwnerImportRaw[],
+  choices: OwnerImportChoice[],
+  importId: string,
+) =>
+  request<OwnerImportResult>("/import", {
+    method: "POST",
+    body: JSON.stringify({ mode: "commit", rows, choices, importId }),
+  });
 export const saveOwnerListing = (input: OwnerListingInput, id?: number) =>
   request<OwnerListing>(id === undefined ? "" : `/${id}`, {
     method: id === undefined ? "POST" : "PATCH",

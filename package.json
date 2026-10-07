@@ -24,6 +24,7 @@
     "test:dates": "tsx scripts/date-format-check.ts",
     "test:daily-work": "tsx scripts/daily-work-check.ts",
     "test:report-export": "tsx scripts/report-export-check.ts",
+    "test:owner-import": "tsx scripts/owner-import-file-check.ts && tsx scripts/owner-import-check.ts",
     "test:owner-workflow": "tsx scripts/owner-workflow-check.ts && tsx scripts/owner-api-check.ts"
   },
   "dependencies": {
@@ -40,7 +41,8 @@
     "pg": "^8.23.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

@@ -65,7 +65,7 @@ INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,propert
 UPDATE owner_listings SET created_at=now()-interval '5 days',assigned_at=now()-interval '4 days',seeding_status='IFU1' WHERE location='Klang';`);
 const user={id:1,username:'preview',displayName:'Local preview - sample data',role:'super_admin' as const};
 
-const app=express();app.use(express.json());
+const app=express();app.use(express.json({limit:'1mb'}));
 
 let failNextSave=false;
 
@@ -99,13 +99,13 @@ app.use('/api',createListingsRouter(()=>({DATABASE_URL:'local-only'}),listingSer
 
 app.get('/api/audit-logs',async(req,res)=>res.json({success:true,data:(await pg.query('SELECT id,listing_id AS "listingId",action,changed_fields AS "changedFields",user_name AS "userName",timestamp FROM listing_audit_logs WHERE ($1::int IS NULL OR listing_id=$1) ORDER BY id DESC',[req.query.listingId?Number(req.query.listingId):null])).rows}));
 
-app.use('/api',createOwnerListingsRouter(()=>({DATABASE_URL:'local-only'}),{authenticate:async()=>user,connect:()=>({query:async(sql,params)=>(await pg.query<Record<string,unknown>>(sql,params)).rows})}));
+app.use('/api',createOwnerListingsRouter(()=>({DATABASE_URL:'local-only'}),{authenticate:async()=>user,connect:()=>({query:async(sql,params)=>(await pg.query<Record<string,unknown>>(sql,params)).rows}),transact:async(_env,statements)=>pg.transaction(async tx=>{const results:Record<string,any>[][]=[];for(const s of statements)results.push((await tx.query<Record<string,any>>(s.sql,s.params)).rows);return results;})}));
 app.get('/api/users',(_req,res)=>res.json({success:true,data:[]}));
 
 // Explicit envDir prevents Vite loading the application's production .env into this preview.
 
-const vite=await createServer({envDir:'.server/preview-empty-env',server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);
-
 const previewPort = Number(process.env.PREVIEW_PORT || 4176);
+
+const vite=await createServer({envDir:'.server/preview-empty-env',server:{middlewareMode:true,hmr:{port:previewPort+1000}},appType:'spa'});app.use(vite.middlewares);
 
 app.listen(previewPort,'127.0.0.1',()=>console.log(`Integrated preview: http://127.0.0.1:${previewPort} (synthetic local data only)`));

@@ -20,6 +20,7 @@ import {
   ownerPrice,
 } from "./OwnerWorkflow";
 import { OwnerForm } from "./OwnerListingForm";
+import { OwnerImportModal } from "./OwnerImportModal";
 const button = "ui-button";
 export function OwnerListingSheet() {
   const { user } = useAuth(),
@@ -39,7 +40,8 @@ export function OwnerListingSheet() {
     [now, setNow] = useState(Date.now());
   const [editing, setEditing] = useState<OwnerListing | null | undefined>(),
     [detailId, setDetailId] = useState<number | null>(null),
-    [showRules, setShowRules] = useState(false);
+    [showRules, setShowRules] = useState(false),
+    [showImport, setShowImport] = useState(false);
   async function refresh() {
     setLoading(true);
     setError("");
@@ -104,6 +106,9 @@ export function OwnerListingSheet() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button className={button} onClick={() => setShowImport(true)}>
+              Import Excel / CSV
+            </button>
             {admin && (
               <button className={button} onClick={() => setShowRules(true)}>
                 Assignment rules
@@ -362,6 +367,12 @@ export function OwnerListingSheet() {
             setRows((r) => r.filter((v) => v.id !== detail.id));
             setDetailId(null);
           }}
+        />
+      )}
+      {showImport && (
+        <OwnerImportModal
+          onClose={() => setShowImport(false)}
+          onImported={() => void refresh()}
         />
       )}
       {showRules && (
