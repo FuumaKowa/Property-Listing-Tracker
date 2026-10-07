@@ -43,6 +43,13 @@
       "when": 1791244800000,
       "tag": "0005_owner_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791331200000,
+      "tag": "0006_owner_selangor_coverage",
+      "breakpoints": true
     }
   ]
 }

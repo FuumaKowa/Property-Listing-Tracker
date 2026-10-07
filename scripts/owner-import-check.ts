@@ -73,11 +73,16 @@ try {
   await pg.exec(readFileSync("drizzle/0000_n8n_ingestion.sql", "utf8"));
   await pg.exec(readFileSync("drizzle/0005_owner_workflow.sql", "utf8"));
   await pg.exec(
+    readFileSync("drizzle/0006_owner_selangor_coverage.sql", "utf8"),
+  );
+  await pg.exec(
     "UPDATE owner_assignment_rules SET user_id=2 WHERE key='shahril'; INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,location,property_link,source,listing_id) VALUES('Keep owner','Not captured','Keep property','landed',450000,'Listed','Original','Klang','https://example.com/existing','mudah','123');",
   );
   const existing = (await pg.query("SELECT * FROM owner_listings")).rows;
   const normal = (await pg.query("SELECT * FROM listings")).rows;
-  const history = (await pg.query("SELECT * FROM owner_listing_events")).rows;
+  const history = (
+    await pg.query("SELECT * FROM owner_listing_events ORDER BY id")
+  ).rows;
   authenticated = false;
   assert.equal((await preview([input])).status, 401);
   authenticated = true;
@@ -256,8 +261,12 @@ try {
     existing,
   );
   assert.deepEqual(
-    (await pg.query("SELECT * FROM owner_listing_events WHERE listing_id=1"))
-      .rows,
+    (
+      await pg.query(
+        "SELECT * FROM owner_listing_events WHERE id <= $1 ORDER BY id",
+        [history[history.length - 1].id],
+      )
+    ).rows,
     history,
   );
   assert.deepEqual((await pg.query("SELECT * FROM listings")).rows, normal);

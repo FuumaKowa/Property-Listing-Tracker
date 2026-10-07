@@ -25,7 +25,7 @@
     "test:daily-work": "tsx scripts/daily-work-check.ts",
     "test:report-export": "tsx scripts/report-export-check.ts",
     "test:owner-import": "tsx scripts/owner-import-file-check.ts && tsx scripts/owner-import-check.ts",
-    "test:owner-workflow": "tsx scripts/owner-workflow-check.ts && tsx scripts/owner-api-check.ts"
+    "test:owner-workflow": "tsx scripts/owner-workflow-check.ts && tsx scripts/owner-api-check.ts && tsx scripts/owner-coverage-check.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

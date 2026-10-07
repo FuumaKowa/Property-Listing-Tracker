@@ -32,6 +32,7 @@ const normalSchema = (
   )
 ).rows;
 await pg.exec(readFileSync("drizzle/0005_owner_workflow.sql", "utf8"));
+await pg.exec(readFileSync("drizzle/0006_owner_selangor_coverage.sql", "utf8"));
 let user: any = {
   id: 1,
   username: "admin",
