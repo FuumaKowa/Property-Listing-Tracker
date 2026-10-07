@@ -1,8 +1,10 @@
 export const OWNER_SHEET = 'Master Listing Owner' as const;
 export const OWNER_PROPERTY_TYPES = ['landed', 'highrise', 'land', 'commercial'] as const;
-export const OWNER_STATUSES = ['Listed', 'Unlisted'] as const;
+export const OWNER_STATUSES = ['Listed', 'Unlisted', 'Rejected'] as const;
 
 export interface OwnerListingInput {
+  location?: string;
+  version?: number;
   ownerName: string;
   noTel: string;
   propertyName: string;
@@ -14,6 +16,14 @@ export interface OwnerListingInput {
 
 export interface OwnerListing extends OwnerListingInput {
   id: number;
+  createdAt?: string;
+  assignedAgentId?: number | null;
+  assignedAgentName?: string | null;
+  assignedAt?: string | null;
+  lastAgentActivityAt?: string | null;
+  seedingStatus?: 'IFU1' | 'IFU2' | 'IFU3' | null;
+  needsAttention?: boolean;
+  activityDueAt?: string | null;
 }
 
 export function safePropertyLink(value: unknown): string | null {
@@ -46,8 +56,9 @@ export function validateOwnerListing(value: unknown): OwnerListingInput {
     if (propertyLink && !safePropertyLink(propertyLink)) throw new Error('Enter a valid property link starting with https:// or http://.');
   }
   if (!OWNER_PROPERTY_TYPES.includes(input.propertyType as OwnerListingInput['propertyType'])) throw new Error('Select a valid property type.');
-  if (!OWNER_STATUSES.includes(input.status as OwnerListingInput['status'])) throw new Error('Select Listed or Unlisted.');
+  if (!OWNER_STATUSES.includes(input.status as OwnerListingInput['status'])) throw new Error('Select Listed, Unlisted or Rejected.');
   const propertyPrice = text('propertyPrice', 'Property price', 19);
   if (!/^\d{1,16}(\.\d{1,2})?$/.test(propertyPrice)) throw new Error('Property price must be a non-negative amount with up to 16 digits and 2 decimal places.');
-  return { ownerName, noTel, propertyName, propertyLink, propertyPrice, propertyType: input.propertyType as OwnerListingInput['propertyType'], status: input.status as OwnerListingInput['status'] };
+  if(input.location!==undefined&&(typeof input.location!=='string'||input.location.length>300))throw new Error('Location must be at most 300 characters.');
+  return { location:typeof input.location==='string'?input.location.trim():undefined,version:typeof input.version==='number'?input.version:undefined,ownerName, noTel, propertyName, propertyLink, propertyPrice, propertyType: input.propertyType as OwnerListingInput['propertyType'], status: input.status as OwnerListingInput['status'] };
 }

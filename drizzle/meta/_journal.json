@@ -36,6 +36,13 @@
       "when": 1790812800000,
       "tag": "0004_daily_work",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791244800000,
+      "tag": "0005_owner_workflow",
+      "breakpoints": true
     }
   ]
 }

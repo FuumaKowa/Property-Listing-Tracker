@@ -1,19 +1,21 @@
 // npm install --no-save --no-package-lock @electric-sql/pglite @playwright/test
 // npx tsx scripts/owner-api-check.ts (local test database only)
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { handleOwnerListings } from '../functions/api/_owner-listings';
-import { ownerListingsTableSql, OwnerListingDb } from '../src/db/ownerListings';
+import { ownerListingsTableSql, ownerListingsLinkSql, OwnerListingDb } from '../src/db/ownerListings';
 
 const postgres = new PGlite();
 const db: OwnerListingDb = { query: async (sql, params) => (await postgres.query<Record<string, unknown>>(sql, params)).rows };
 let authenticated = true;
 let connects = 0;
 const services = {
-  authenticate: async () => authenticated ? { id: 1, username: 'tester', displayName: 'Test User', role: 'user' as const } : null,
+  authenticate: async () => authenticated ? { id: 1, username: 'tester', displayName: 'Test User', role: 'admin' as const } : null,
   connect: () => { connects++; return db; },
 };
 async function call(method: string, body?: unknown, id?: string) {
+  if(id && ['PATCH','DELETE'].includes(method) && /^\d+$/.test(id)){const rows=await db.query('SELECT version FROM owner_listings WHERE id=$1',[Number(id)]);body={...(body as object),version:rows[0]?.version||1};}
   return handleOwnerListings({ env: { DATABASE_URL: 'test-only' }, params: id ? { id } : undefined,
     request: new Request('http://localhost/api/owner-listings', { method, body: body === undefined ? undefined : JSON.stringify(body) }),
   }, services);
@@ -32,6 +34,10 @@ try {
   }
   await db.query(ownerListingsTableSql.replace("  property_link TEXT NOT NULL DEFAULT '',\n", ''));
   await db.query("INSERT INTO owner_listings (owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name) VALUES ('Legacy','01','Legacy property','land',1,'Listed','T')");
+  await db.query(ownerListingsLinkSql);
+  await postgres.exec(`CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users VALUES(1,'tester','Test User','admin')`);
+  await postgres.exec(readFileSync('drizzle/0000_n8n_ingestion.sql','utf8'));
+  await postgres.exec(readFileSync('drizzle/0005_owner_workflow.sql','utf8'));
   const legacy = (await (await call('GET')).json()).data[0];
   assert.equal(legacy.propertyLink, '', 'Existing records gain an empty link without losing their data');
   assert.equal(legacy.propertyName, 'Legacy property');

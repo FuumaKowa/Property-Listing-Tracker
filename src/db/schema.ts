@@ -109,7 +109,15 @@ export const listingAuditLogsRelations = relations(listingAuditLogs, ({ one }) =
 }));
 
 // Owner records have no expiry or renewal lifecycle.
+export const ownerAssignmentRules = pgTable('owner_assignment_rules', {
+  key:text('key').primaryKey(),agentLabel:text('agent_label').notNull(),areas:jsonb('areas').$type<string[]>().notNull(),userId:integer('user_id').references(()=>authUsers.id,{onDelete:'set null'}),
+});
 export const ownerListings = pgTable('owner_listings', {
+  version:integer('version').notNull().default(1),
+  assignedAgentId:integer('assigned_agent_id').references(()=>authUsers.id,{onDelete:'set null'}),assignedAgentName:text('assigned_agent_name'),
+  assignedAt:timestamp('assigned_at',{withTimezone:true,mode:'string'}),
+  lastAgentActivityAt:timestamp('last_agent_activity_at',{withTimezone:true,mode:'string'}),
+  seedingStatus:text('seeding_status'),
   // OwnerHunter metadata is exclusive to Master Listing Owner.
   source: text('source'),
   externalListingId: text('listing_id'),
@@ -139,11 +147,16 @@ export const ownerListings = pgTable('owner_listings', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, table => [
+  check('owner_listings_seeding_status_check',sql`${table.seedingStatus} IN ('IFU1','IFU2','IFU3')`),
   check('owner_listings_owner_name_check', sql`length(trim(${table.ownerName})) BETWEEN 1 AND 200`),
   check('owner_listings_no_tel_check', sql`length(trim(${table.noTel})) BETWEEN 1 AND 50`),
   check('owner_listings_property_name_check', sql`length(trim(${table.propertyName})) BETWEEN 1 AND 300`),
   check('owner_listings_property_type_check', sql`${table.propertyType} IN ('landed', 'highrise', 'land', 'commercial')`),
   check('owner_listings_property_price_check', sql`${table.propertyPrice} >= 0`),
-  check('owner_listings_status_check', sql`${table.status} IN ('Listed', 'Unlisted')`),
+  check('owner_listings_status_check', sql`${table.status} IN ('Listed', 'Unlisted', 'Rejected')`),
   uniqueIndex('owner_listings_source_listing_id_unique').on(table.source, table.externalListingId),
 ]);
+
+export const ownerListingEvents=pgTable('owner_listing_events',{
+ id:serial('id').primaryKey(),listingId:integer('listing_id').references(()=>ownerListings.id,{onDelete:'set null'}),action:text('action').notNull(),actorId:integer('actor_id'),actorName:text('actor_name').notNull(),note:text('note'),beforeRecord:jsonb('before_record'),afterRecord:jsonb('after_record'),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+},table=>[index('owner_listing_events_listing_idx').on(table.listingId,table.id)]);

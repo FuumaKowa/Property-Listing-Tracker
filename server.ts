@@ -6,7 +6,7 @@ import {onRequestGet as readAudit} from './functions/api/audit-logs';
 import {createListingsRouter} from './src/server/listings';
 
 import { getSessionUser } from './functions/api/_auth.ts';
-import { handleOwnerListings } from './functions/api/_owner-listings.ts';
+import {createOwnerListingsRouter} from './src/server/ownerListings';
 import { db } from './src/db/index.ts';
 import { createN8nRouter } from './src/server/n8n/express.ts';
 import { createPublicationsRouter } from './src/server/publications/express.ts';
@@ -28,19 +28,7 @@ app.use('/api', createPublicationsRouter(() => ({ DATABASE_URL: process.env.DATA
 app.use('/api', createListingsRouter(() => ({DATABASE_URL:process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || ''})));
 app.get('/api/audit-logs',async(req,res)=>{const response=await readAudit({env:{DATABASE_URL:process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || ''},request:new Request('http://localhost'+req.originalUrl,{headers:{Cookie:req.headers.cookie || ''}})});res.status(response.status).type('application/json').send(await response.text());});
 
-// Use the same authenticated owner API in local/Node and Cloudflare deployments.
-app.all(['/api/owner-listings', '/api/owner-listings/:id'], async (req: Request, res: Response) => {
-  const request = new Request(`http://localhost${req.originalUrl}`, {
-    method: req.method,
-    headers: { 'Content-Type': 'application/json', Cookie: req.headers.cookie || '' },
-    body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
-  });
-  const response = await handleOwnerListings({
-    env: { DATABASE_URL: process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '' },
-    request, params: req.params.id ? { id: req.params.id } : undefined,
-  });
-  res.status(response.status).type('application/json').send(await response.text());
-});
+app.use('/api',createOwnerListingsRouter(()=>({DATABASE_URL:process.env.DATABASE_URL||process.env.NEON_DATABASE_URL||''})));
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 

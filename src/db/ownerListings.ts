@@ -1,11 +1,11 @@
-import { OwnerListing, OwnerListingInput } from '../ownerListing';
+import { OwnerListing } from '../ownerListing';
 
 export interface OwnerListingDb {
   query: (sql: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
 }
 
-// Additive and idempotent, following the existing auth table initialization.
-// Called only after authentication. Existing property listings are untouched.
+// Legacy baseline for database bootstrap and isolated fixtures.
+// Apply the checked-in migrations before starting the API.
 export const ownerListingsTableSql = `CREATE TABLE IF NOT EXISTS owner_listings (
   id SERIAL PRIMARY KEY,
   owner_name TEXT NOT NULL CHECK (length(trim(owner_name)) BETWEEN 1 AND 200),
@@ -23,23 +23,14 @@ export const ownerListingsTableSql = `CREATE TABLE IF NOT EXISTS owner_listings 
 // Upgrade owner tables created before property links were introduced.
 export const ownerListingsLinkSql = "ALTER TABLE owner_listings ADD COLUMN IF NOT EXISTS property_link TEXT NOT NULL DEFAULT ''";
 
-const columns = `id, owner_name AS "ownerName", no_tel AS "noTel", property_name AS "propertyName",
-  property_link AS "propertyLink", property_type AS "propertyType", property_price::text AS "propertyPrice", status`;
+export const ownerColumns = `id, owner_name AS "ownerName", no_tel AS "noTel", property_name AS "propertyName",
+  property_link AS "propertyLink", property_type AS "propertyType", property_price::text AS "propertyPrice", status,
+  location, version, created_at AT TIME ZONE 'UTC' AS "createdAt", assigned_agent_id AS "assignedAgentId", assigned_agent_name AS "assignedAgentName",
+  assigned_at AS "assignedAt", last_agent_activity_at AS "lastAgentActivityAt", seeding_status AS "seedingStatus",
+  coalesce(last_agent_activity_at,assigned_at)+interval '3 days' AS "activityDueAt",
+  (status='Unlisted' AND assigned_agent_id IS NOT NULL AND coalesce(last_agent_activity_at,assigned_at)+interval '3 days'<=now()) AS "needsAttention"`;
+const columns=ownerColumns;
 
 export async function readOwnerListings(db: OwnerListingDb): Promise<OwnerListing[]> {
   return await db.query(`SELECT ${columns} FROM owner_listings ORDER BY id`) as unknown as OwnerListing[];
-}
-
-export async function writeOwnerListing(db: OwnerListingDb, input: OwnerListingInput, userName: string, id?: number): Promise<OwnerListing | undefined> {
-  const params = [input.ownerName, input.noTel, input.propertyName, input.propertyType, input.propertyPrice, input.status, userName, input.propertyLink ?? null];
-  const rows = id === undefined
-    ? await db.query(`INSERT INTO owner_listings (owner_name, no_tel, property_name, property_type, property_price, status, updated_by_name, property_link)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'')) RETURNING ${columns}`, params)
-    : await db.query(`UPDATE owner_listings SET owner_name=$1, no_tel=$2, property_name=$3, property_type=$4,
-        property_price=$5, status=$6, updated_by_name=$7, property_link=COALESCE($8,property_link), updated_at=NOW() WHERE id=$9 RETURNING ${columns}`, [...params, id]);
-  return rows[0] as unknown as OwnerListing | undefined;
-}
-
-export async function removeOwnerListing(db: OwnerListingDb, id: number): Promise<boolean> {
-  return (await db.query('DELETE FROM owner_listings WHERE id=$1 RETURNING id', [id])).length > 0;
 }
