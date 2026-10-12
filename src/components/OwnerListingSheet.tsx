@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   OwnerListing,
   OWNER_PROPERTY_TYPES,
   OWNER_STATUSES,
   OWNER_SHEET,
+  OWNER_SEEDING_STAGES,
 } from "../ownerListing";
 import {
   fetchOwnerListings,
@@ -21,6 +22,7 @@ import {
 } from "./OwnerWorkflow";
 import { OwnerForm } from "./OwnerListingForm";
 import { OwnerImportModal } from "./OwnerImportModal";
+import { browseOwners, defaultOwnerFilters, type OwnerFilters } from "../utils/ownerBrowsing";
 const button = "ui-button";
 export function OwnerListingSheet() {
   const { user } = useAuth(),
@@ -32,12 +34,16 @@ export function OwnerListingSheet() {
     });
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
-    [query, setQuery] = useState(""),
-    [status, setStatus] = useState("All"),
-    [type, setType] = useState("All"),
-    [agent, setAgent] = useState("All"),
-    [alertOnly, setAlertOnly] = useState(false),
     [now, setNow] = useState(Date.now());
+  const [filters, setFilters] = useState<OwnerFilters>(defaultOwnerFilters);
+  const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(50);
+  const scrollArea = useRef<HTMLDivElement>(null);
+  const [showFilters,setShowFilters] = useState(false);
+  const {query,status,type,agent,alertOnly} = filters;
+  const updateFilter = <K extends keyof OwnerFilters>(key:K,value:OwnerFilters[K]) => setFilters(previous=>({...previous,[key]:value}));
+  const setQuery=(value:string)=>updateFilter('query',value),setStatus=(value:string)=>updateFilter('status',value),setType=(value:string)=>updateFilter('type',value),setAgent=(value:string)=>updateFilter('agent',value);
+  const resetFilters=()=>{setFilters({...defaultOwnerFilters});setPage(1);};
+  useEffect(()=>{setPage(1);if(scrollArea.current)scrollArea.current.scrollTop=0;},[filters,pageSize]);
   const [editing, setEditing] = useState<OwnerListing | null | undefined>(),
     [detailId, setDetailId] = useState<number | null>(null),
     [showRules, setShowRules] = useState(false),
@@ -69,32 +75,20 @@ export function OwnerListingSheet() {
         ? prev.map((r) => (r.id === row.id ? row : r))
         : [...prev, row],
     );
-  const filtered = rows
-    .map((row, i) => ({ row, number: i + 1 }))
-    .filter(
-      ({ row }) =>
-        [
-          row.propertyName,
-          row.ownerName,
-          row.noTel,
-          row.location,
-          row.assignedAgentName,
-        ].some((v) => v?.toLowerCase().includes(query.trim().toLowerCase())) &&
-        (status === "All" || row.status === status) &&
-        (type === "All" || row.propertyType === type) &&
-        (agent === "All" ||
-          (agent === "unassigned"
-            ? !row.assignedAgentId
-            : String(row.assignedAgentId) === agent)) &&
-        (!alertOnly || ownerOverdue(row, now)),
-    );
+  const results = useMemo(()=>browseOwners(rows,filters,pageSize,page,now),[rows,filters,pageSize,page,now]);
+  const filtered=results.pageRows;
+  const myCount=rows.filter(row=>row.assignedAgentId===user?.id).length;
+  const overdueCount=rows.filter(row=>ownerOverdue(row,now)).length;
+  const unassignedCount=rows.filter(row=>row.assignedAgentId==null).length;
+  const locations=Array.from(new Set(settings.rules.flatMap(rule=>rule.areas))).sort();
+  const changePage=(next:number)=>{setPage(next);if(scrollArea.current)scrollArea.current.scrollTop=0;if(window.innerWidth<768)window.scrollTo({top:0,behavior:"auto"});};
   const detail = rows.find((r) => r.id === detailId);
   return (
     <section
       className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50"
       aria-label={OWNER_SHEET}
     >
-      <div className="shrink-0 space-y-3 border-b border-slate-200 bg-white p-4 sm:px-6">
+      <div className="max-h-[50vh] shrink-0 space-y-3 overflow-y-auto border-b border-slate-200 bg-white p-4 sm:px-6">
         <div className="flex flex-wrap justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wider text-slate-400">
@@ -129,20 +123,19 @@ export function OwnerListingSheet() {
           <button
             className={button + " text-amber-800"}
             aria-pressed={alertOnly}
-            onClick={() => setAlertOnly((v) => !v)}
+            onClick={() => setFilters({...defaultOwnerFilters,alertOnly:!alertOnly})}
           >
-            {rows.filter((r) => ownerOverdue(r, now)).length} inactive for 3
-            days
+            {overdueCount} Overdue
           </button>
           <button
             className={button}
             onClick={() => {
-              setAgent("unassigned");
-              setAlertOnly(false);
+              setFilters({...defaultOwnerFilters,agent:"unassigned"});
             }}
           >
-            {rows.filter((r) => !r.assignedAgentId).length} unassigned
+            {unassignedCount} Unassigned
           </button>
+          <button className={button} aria-pressed={agent===String(user?.id)} onClick={()=>setFilters({...defaultOwnerFilters,agent:String(user?.id)})}>{myCount} My listings</button>
           <span className="text-xs text-slate-500">
             Admin can reassign overdue listings. Listed and rejected records do
             not alert.
@@ -184,27 +177,36 @@ export function OwnerListingSheet() {
             value={agent}
             onChange={(e) => setAgent(e.target.value)}
           >
-            <option value="All">All agents</option>
-            <option value="unassigned">Unassigned</option>
+            <option value="All">All agents ({results.facetTotal})</option>
+            <option value="unassigned">Unassigned ({results.agentCounts.unassigned || 0})</option>
             {settings.agents.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}
+                {a.name} ({results.agentCounts[String(a.id)] || 0})
               </option>
             ))}
           </select>
           <button
             className={button}
             onClick={() => {
-              setQuery("");
-              setStatus("All");
-              setType("All");
-              setAgent("All");
-              setAlertOnly(false);
+              resetFilters();
             }}
           >
             Reset filters
           </button>
         </div>
+        <button className={button} aria-expanded={showFilters} aria-controls="owner-extra-filters" onClick={()=>setShowFilters(value=>!value)}>More filters{[filters.location,filters.stage!=='All',filters.minPrice,filters.maxPrice,filters.dateFrom,filters.dateTo,filters.sort!=='newest'].filter(Boolean).length ? " ("+[filters.location,filters.stage!=='All',filters.minPrice,filters.maxPrice,filters.dateFrom,filters.dateTo,filters.sort!=='newest'].filter(Boolean).length+")" : ""}</button>
+        {showFilters && <div id="owner-extra-filters" className="flex flex-wrap items-end gap-2">
+          <label className="text-xs text-slate-600">Location<input className="ui-input mt-1 w-44" aria-label="Filter owner location" placeholder="e.g. Shah Alam" list="owner-locations" value={filters.location} onChange={event=>updateFilter('location',event.target.value)}/></label>
+          <datalist id="owner-locations">{locations.map(value=><option key={value} value={value}/>)}</datalist>
+          <label className="text-xs text-slate-600">Seeding stage<select className={button+' mt-1 block'} aria-label="Filter seeding stage" value={filters.stage} onChange={event=>updateFilter('stage',event.target.value)}><option value="All">All stages</option><option value="not-started">Not started</option>{OWNER_SEEDING_STAGES.map(value=><option key={value}>{value}</option>)}</select></label>
+          <label className="text-xs text-slate-600">Min price (RM)<input className="ui-input mt-1 w-32" aria-label="Minimum owner price" inputMode="decimal" placeholder="e.g. 200000" value={filters.minPrice} onChange={event=>updateFilter('minPrice',event.target.value)}/></label>
+          <label className="text-xs text-slate-600">Max price (RM)<input className="ui-input mt-1 w-32" aria-label="Maximum owner price" inputMode="decimal" placeholder="e.g. 500000" value={filters.maxPrice} onChange={event=>updateFilter('maxPrice',event.target.value)}/></label>
+          <label className="text-xs text-slate-600">Date added from<input className="ui-input mt-1 w-36" aria-label="Date added from" placeholder="DD/MM/YYYY" value={filters.dateFrom} onChange={event=>updateFilter('dateFrom',event.target.value)}/></label>
+          <label className="text-xs text-slate-600">Date added to<input className="ui-input mt-1 w-36" aria-label="Date added to" placeholder="DD/MM/YYYY" value={filters.dateTo} onChange={event=>updateFilter('dateTo',event.target.value)}/></label>
+          <label className="text-xs text-slate-600">Sort<select className={button+' mt-1 block'} aria-label="Sort owner listings" value={filters.sort} onChange={event=>updateFilter('sort',event.target.value)}><option value="newest">Newest added</option><option value="oldest">Oldest added</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="inactivity">Longest inactivity</option></select></label>
+        </div>}
+        {results.errors.length>0 && <p role="alert" className="text-sm text-rose-700">{results.errors.join(' ')}</p>}
+        <p role="status" className="text-sm font-semibold text-slate-700">{results.total} matching listings{agent==='All'?'':agent==='unassigned'?' · Unassigned':' · '+(settings.agents.find(value=>String(value.id)===agent)?.name || 'Selected agent')}</p>
         {error && (
           <p role="alert" className="text-sm text-rose-700">
             {error}
@@ -217,7 +219,7 @@ export function OwnerListingSheet() {
           </p>
         )}
       </div>
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+      <div ref={scrollArea} className="min-h-0 min-w-0 flex-1 overflow-auto">
         {loading ? (
           <p role="status" className="p-6">
             Loading owner listings…
@@ -347,9 +349,17 @@ export function OwnerListingSheet() {
           </>
         )}
       </div>
-      <p className="border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">
-        Showing {filtered.length} of {rows.length} owner listings
-      </p>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+        <p>Showing {results.start}–{results.end} of {results.total} matching listings · {rows.length} total</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label>Rows per page <select className={button} aria-label="Owner rows per page" value={pageSize} onChange={event=>setPageSize(Number(event.target.value))}>{[25,50,100].map(value=><option key={value}>{value}</option>)}</select></label>
+          <button className={button} disabled={loading||results.page===1} onClick={()=>changePage(1)} aria-label="First owner page">First</button>
+          <button className={button} disabled={loading||results.page===1} onClick={()=>changePage(results.page-1)} aria-label="Previous owner page">Previous</button>
+          <span>Page {results.page} of {results.pageCount}</span>
+          <button className={button} disabled={loading||results.page===results.pageCount} onClick={()=>changePage(results.page+1)} aria-label="Next owner page">Next</button>
+          <button className={button} disabled={loading||results.page===results.pageCount} onClick={()=>changePage(results.pageCount)} aria-label="Last owner page">Last</button>
+        </div>
+      </div>
       {detail && (
         <OwnerWorkflowCard
           key={detail.id}

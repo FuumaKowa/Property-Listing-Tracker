@@ -5,7 +5,7 @@ import {
   ownerColumns,
   readOwnerListings,
 } from "../../src/db/ownerListings";
-import { validateOwnerListing, OWNER_STATUSES } from "../../src/ownerListing";
+import { validateOwnerListing, OWNER_STATUSES, OWNER_SEEDING_STAGES } from "../../src/ownerListing";
 import { importOwners } from "./_owner-import";
 
 interface Context {
@@ -164,8 +164,8 @@ export async function handleOwnerListings(
       kind = "assignment";
     } else if (action === "activity" && method === "PATCH") {
       if (body.seedingStatus !== undefined) {
-        if (![null, "IFU1", "IFU2", "IFU3"].includes(body.seedingStatus))
-          return fail("Select IFU1, IFU2 or IFU3.");
+        if (body.seedingStatus !== null && !OWNER_SEEDING_STAGES.includes(body.seedingStatus))
+          return fail("Select IFU1, IFU2, IFU3 or Contacted.");
         sets.push("seeding_status=" + param(body.seedingStatus));
       }
       if (body.status !== undefined) {

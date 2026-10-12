@@ -33,6 +33,9 @@ const normalSchema = (
 ).rows;
 await pg.exec(readFileSync("drizzle/0005_owner_workflow.sql", "utf8"));
 await pg.exec(readFileSync("drizzle/0006_owner_selangor_coverage.sql", "utf8"));
+const beforeContactedMigration = (await pg.query("SELECT * FROM owner_listings ORDER BY id")).rows;
+await pg.exec(readFileSync("drizzle/0007_owner_contacted_stage.sql", "utf8"));
+assert.deepEqual((await pg.query("SELECT * FROM owner_listings ORDER BY id")).rows, beforeContactedMigration, "Contacted migration preserves existing owner rows");
 let user: any = {
   id: 1,
   username: "admin",
@@ -336,7 +339,16 @@ try {
       },
     );
     assert.equal(reassigned.status, 200);
-    assert.equal((await reassigned.json()).data.assignedAgentId, 6);
+    const assigned = (await reassigned.json()).data;
+    assert.equal(assigned.assignedAgentId, 6);
+    const contacted = await fetch(`${base}/owner-listings/${row.id}/activity`, {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:assigned.version,seedingStatus:"Contacted",note:"Owner contacted"})});
+    assert.equal(contacted.status,200);
+    assert.equal((await contacted.json()).data.seedingStatus,"Contacted");
+    const reloaded = (await (await call("GET")).json()).data.find((v:any)=>v.id===row.id);
+    assert.equal(reloaded.seedingStatus,"Contacted","Contacted persists through Express and Pages adapters");
+    assert.equal((await pg.query<any>("SELECT seeding_status FROM owner_listings WHERE id=$1",[row.id])).rows[0].seeding_status,"Contacted");
+    const contactedHistory = (await (await call("GET",undefined,row.id,"history")).json()).data;
+    assert(contactedHistory.some((event:any)=>event.seedingStatus==="Contacted"&&event.note==="Owner contacted"));
     user = null;
     assert.equal((await fetch(`${base}/owner-listings`)).status, 401);
   } finally {

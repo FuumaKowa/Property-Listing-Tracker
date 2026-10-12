@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   type OwnerListing,
   OWNER_STATUSES,
+  OWNER_SEEDING_STAGES,
   safePropertyLink,
 } from "../ownerListing";
 import {
@@ -245,7 +246,7 @@ export function OwnerWorkflowCard({
                 onChange={(e) => setStage(e.target.value)}
               >
                 <option value="">Not started</option>
-                {["IFU1", "IFU2", "IFU3"].map((s) => (
+                {OWNER_SEEDING_STAGES.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
               </select>

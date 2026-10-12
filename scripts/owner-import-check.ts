@@ -75,6 +75,7 @@ try {
   await pg.exec(
     readFileSync("drizzle/0006_owner_selangor_coverage.sql", "utf8"),
   );
+  await pg.exec(readFileSync("drizzle/0007_owner_contacted_stage.sql", "utf8"));
   await pg.exec(
     "UPDATE owner_assignment_rules SET user_id=2 WHERE key='shahril'; INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,location,property_link,source,listing_id) VALUES('Keep owner','Not captured','Keep property','landed',450000,'Listed','Original','Klang','https://example.com/existing','mudah','123');",
   );
@@ -199,6 +200,9 @@ try {
   assert.equal(sentinel.no_tel, "Not captured");
   assert.equal(sentinel.seeding_status, "IFU2");
   assert.equal(sentinel.assigned_agent_id, null);
+  const contactedImport = { ...missing, propertyName: "Contacted import", seedingStatus: "contacted" };
+  assert.equal((await commit([contactedImport], ["new"])).status, 200);
+  assert.equal((await pg.query<any>("SELECT seeding_status FROM owner_listings WHERE property_name='Contacted import'")).rows[0].seeding_status, "Contacted");
   for (const change of [
     { propertyPrice: "RM 30,00" },
     { propertyPrice: "1e5" },

@@ -147,7 +147,7 @@ export const ownerListings = pgTable('owner_listings', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, table => [
-  check('owner_listings_seeding_status_check',sql`${table.seedingStatus} IN ('IFU1','IFU2','IFU3')`),
+  check('owner_listings_seeding_status_check',sql`${table.seedingStatus} IN ('IFU1','IFU2','IFU3','Contacted')`),
   check('owner_listings_owner_name_check', sql`length(trim(${table.ownerName})) BETWEEN 1 AND 200`),
   check('owner_listings_no_tel_check', sql`length(trim(${table.noTel})) BETWEEN 1 AND 50`),
   check('owner_listings_property_name_check', sql`length(trim(${table.propertyName})) BETWEEN 1 AND 300`),

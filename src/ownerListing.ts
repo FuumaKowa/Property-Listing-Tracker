@@ -1,6 +1,7 @@
 export const OWNER_SHEET = 'Master Listing Owner' as const;
 export const OWNER_PROPERTY_TYPES = ['landed', 'highrise', 'land', 'commercial'] as const;
 export const OWNER_STATUSES = ['Listed', 'Unlisted', 'Rejected'] as const;
+export const OWNER_SEEDING_STAGES = ['IFU1', 'IFU2', 'IFU3', 'Contacted'] as const;
 
 export interface OwnerListingInput {
   location?: string;
@@ -21,7 +22,7 @@ export interface OwnerListing extends OwnerListingInput {
   assignedAgentName?: string | null;
   assignedAt?: string | null;
   lastAgentActivityAt?: string | null;
-  seedingStatus?: 'IFU1' | 'IFU2' | 'IFU3' | null;
+  seedingStatus?: typeof OWNER_SEEDING_STAGES[number] | null;
   needsAttention?: boolean;
   activityDueAt?: string | null;
 }

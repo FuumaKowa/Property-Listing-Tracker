@@ -55,6 +55,7 @@ await pg.exec(ownerListingsTableSql);
 await pg.exec(readFileSync('drizzle/0000_n8n_ingestion.sql','utf8'));
 await pg.exec(readFileSync('drizzle/0005_owner_workflow.sql','utf8'));
 await pg.exec(readFileSync('drizzle/0006_owner_selangor_coverage.sql','utf8'));
+await pg.exec(readFileSync('drizzle/0007_owner_contacted_stage.sql','utf8'));
 await pg.exec(`UPDATE owner_assignment_rules SET user_id=CASE key WHEN 'shahril' THEN 2 WHEN 'hakim' THEN 3 WHEN 'luqman' THEN 4 WHEN 'ikhwan' THEN 5 WHEN 'muz' THEN 6 END;
 INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,location,property_link) VALUES
 ('Sample owner','Not captured','Seksyen U9 Apartment','highrise',288000,'Unlisted','Local preview','Shah Alam','https://example.com/owner/shah-alam'),
@@ -64,6 +65,7 @@ INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,propert
 ('Sample owner','Not captured','Rawang Corner Home','landed',420000,'Unlisted','Local preview','Rawang',''),
 ('Not captured','Not captured','Location pending','land',200000,'Unlisted','Local preview','','');
 UPDATE owner_listings SET created_at=now()-interval '5 days',assigned_at=now()-interval '4 days',seeding_status='IFU1' WHERE location='Klang';`);
+await pg.exec("INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,location,seeding_status) SELECT 'Synthetic owner','Not captured','Browsing sample '||n,'highrise',200000+n*1000,'Unlisted','Local preview',CASE WHEN n%2=0 THEN 'Klang' ELSE 'Shah Alam' END,CASE WHEN n%5=0 THEN 'Contacted' ELSE 'IFU1' END FROM generate_series(1,120) n;");
 const user={id:1,username:'preview',displayName:'Local preview - sample data',role:'super_admin' as const};
 
 const app=express();app.use(express.json({limit:'1mb'}));

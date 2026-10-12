@@ -1,4 +1,4 @@
-import { validateOwnerListing, type OwnerListingInput } from "./ownerListing";
+import { validateOwnerListing, OWNER_SEEDING_STAGES, type OwnerListingInput } from "./ownerListing";
 import { normalizePropertyType } from "./server/n8n/validation";
 
 export const OWNER_IMPORT_LIMIT = 200;
@@ -16,7 +16,7 @@ export const OWNER_IMPORT_FIELDS = [
 export type OwnerImportField = (typeof OWNER_IMPORT_FIELDS)[number][0];
 export type OwnerImportRaw = Partial<Record<OwnerImportField, string>>;
 export type OwnerImportInput = OwnerListingInput & {
-  seedingStatus: "IFU1" | "IFU2" | "IFU3" | null;
+  seedingStatus: typeof OWNER_SEEDING_STAGES[number] | null;
 };
 export type OwnerImportChoice = "new" | "skip" | "append";
 export interface OwnerImportRow {
@@ -53,9 +53,9 @@ export function normalizeOwnerImport(value: unknown): OwnerImportInput {
   const status = input.status
     ? input.status[0].toUpperCase() + input.status.slice(1).toLowerCase()
     : "Unlisted";
-  const stage = input.seedingStatus.toUpperCase();
-  if (stage && !["IFU1", "IFU2", "IFU3"].includes(stage))
-    throw new Error("Seeding stage must be IFU1, IFU2 or IFU3.");
+  const stage = OWNER_SEEDING_STAGES.find((value) => value.toUpperCase() === input.seedingStatus.toUpperCase());
+  if (input.seedingStatus && !stage)
+    throw new Error("Seeding stage must be IFU1, IFU2, IFU3 or Contacted.");
   return {
     ...validateOwnerListing({
       ...input,
