@@ -66,6 +66,7 @@ INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,propert
 ('Not captured','Not captured','Location pending','land',200000,'Unlisted','Local preview','','');
 UPDATE owner_listings SET created_at=now()-interval '5 days',assigned_at=now()-interval '4 days',seeding_status='IFU1' WHERE location='Klang';`);
 await pg.exec("INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,location,seeding_status) SELECT 'Synthetic owner','Not captured','Browsing sample '||n,'highrise',200000+n*1000,'Unlisted','Local preview',CASE WHEN n%2=0 THEN 'Klang' ELSE 'Shah Alam' END,CASE WHEN n%5=0 THEN 'Contacted' ELSE 'IFU1' END FROM generate_series(1,120) n;");
+await pg.exec("UPDATE owner_listings SET seeding_status=CASE property_name WHEN 'Browsing sample 1' THEN 'IFU1' WHEN 'Browsing sample 2' THEN 'IFU2' WHEN 'Browsing sample 3' THEN 'IFU3' WHEN 'Browsing sample 4' THEN 'Contacted' WHEN 'Browsing sample 5' THEN NULL ELSE 'IFU3' END,status=CASE property_name WHEN 'Browsing sample 6' THEN 'Listed' WHEN 'Browsing sample 7' THEN 'Rejected' ELSE 'Unlisted' END WHERE property_name IN ('Browsing sample 1','Browsing sample 2','Browsing sample 3','Browsing sample 4','Browsing sample 5','Browsing sample 6','Browsing sample 7'); UPDATE owner_listings SET assigned_at=now()-interval '4 days' WHERE property_name='Browsing sample 2';");
 const user={id:1,username:'preview',displayName:'Local preview - sample data',role:'super_admin' as const};
 
 const app=express();app.use(express.json({limit:'1mb'}));

@@ -23,6 +23,9 @@ import {
 import { OwnerForm } from "./OwnerListingForm";
 import { OwnerImportModal } from "./OwnerImportModal";
 import { browseOwners, defaultOwnerFilters, type OwnerFilters } from "../utils/ownerBrowsing";
+import { Clock3 } from "lucide-react";
+import { ownerRowTone, OWNER_ROW_TONES } from "../utils/ownerRowColors";
+function OwnerOverdueBadge(){return <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-900" title="No agent activity for 3 days"><Clock3 className="h-3.5 w-3.5" aria-hidden="true"/>Overdue</span>;}
 const button = "ui-button";
 export function OwnerListingSheet() {
   const { user } = useAuth(),
@@ -207,6 +210,11 @@ export function OwnerListingSheet() {
         </div>}
         {results.errors.length>0 && <p role="alert" className="text-sm text-rose-700">{results.errors.join(' ')}</p>}
         <p role="status" className="text-sm font-semibold text-slate-700">{results.total} matching listings{agent==='All'?'':agent==='unassigned'?' · Unassigned':' · '+(settings.agents.find(value=>String(value.id)===agent)?.name || 'Selected agent')}</p>
+        <div aria-label="Owner row colour legend" className="flex flex-wrap items-center gap-1.5 text-xs text-slate-700">
+          <span className="mr-1 font-medium">Row colours:</span>
+          {OWNER_ROW_TONES.map(tone=><span key={tone.key} className={"rounded-md border border-slate-300 px-2 py-1 "+tone.classes}>{tone.label}</span>)}
+          <span className="text-slate-500">Listed / Rejected override seeding stage.</span>
+        </div>
         {error && (
           <p role="alert" className="text-sm text-rose-700">
             {error}
@@ -255,13 +263,10 @@ export function OwnerListingSheet() {
                   <tr
                     key={r.id}
                     className={
-                      "border-b border-slate-100 " +
-                      (ownerOverdue(r, now)
-                        ? "bg-amber-50"
-                        : "bg-white hover:bg-slate-50")
+                      "border-b border-slate-200 hover:brightness-[0.98] " + ownerRowTone(r).classes
                     }
                   >
-                    <td className="px-4 py-3 text-slate-400">{number}</td>
+                    <td className="px-4 py-3 text-slate-600">{number}</td>
                     <td className="max-w-64 px-4 py-3">
                       <button
                         className="text-left font-semibold text-indigo-700 hover:underline"
@@ -283,16 +288,12 @@ export function OwnerListingSheet() {
                       formatDateTime(r.createdAt),
                       r.seedingStatus || "Not started",
                       r.status,
-                      ownerOverdue(r, now)
-                        ? "Follow-up overdue"
-                        : !r.assignedAgentId
-                          ? "Needs assignment"
-                          : "—",
                     ].map((v, i) => (
                       <td key={i} className="px-4 py-3">
                         {v}
                       </td>
                     ))}
+                    <td className="px-4 py-3">{ownerOverdue(r,now)?<OwnerOverdueBadge/>:r.assignedAgentId==null?'Needs assignment':'—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -302,13 +303,10 @@ export function OwnerListingSheet() {
                 <article
                   key={r.id}
                   className={
-                    "rounded-xl border p-4 " +
-                    (ownerOverdue(r, now)
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-slate-200 bg-white")
+                    "rounded-xl border border-slate-200 p-4 " + ownerRowTone(r).classes
                   }
                 >
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-600">
                     No. {number} · {r.propertyType} · {r.status}
                   </p>
                   <button
@@ -328,15 +326,13 @@ export function OwnerListingSheet() {
                       : "Unassigned"}{" "}
                     · {r.seedingStatus || "Not started"}
                   </p>
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-2 text-xs text-slate-700">
                     Added {formatDateTime(r.createdAt)}
                     <br />
                     Assigned {formatDateTime(r.assignedAt)}
                   </p>
                   {ownerOverdue(r, now) && (
-                    <p className="mt-2 text-sm text-amber-800">
-                      No agent activity for 3 days
-                    </p>
+                    <div className="mt-2"><OwnerOverdueBadge/></div>
                   )}
                 </article>
               ))}
