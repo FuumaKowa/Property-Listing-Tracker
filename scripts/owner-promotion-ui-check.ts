@@ -27,6 +27,20 @@ try {
   assert.equal((await owners()).find((r:any)=>r.propertyName===property).transactionType,'sale');
   assert.equal((await listings()).filter((r:any)=>r.property===property).length,1);
   assert.equal((await listings()).find((r:any)=>r.property===property).projectCategory,'Subsale Direct Listing (SSDL)');
+  const original=(await listings()).find((r:any)=>r.property===property);
+  const saveStatus=async(status:string)=>{
+   await modal.getByLabel('Status',{exact:true}).selectOption(status);
+   await Promise.all([page.waitForResponse(r=>r.url().includes('/api/owner-listings/')&&r.request().method()==='GET'),modal.getByRole('button',{name:'Save follow-up',exact:true}).click()]);
+  };
+  await saveStatus('Unlisted');
+  assert.equal((await listings()).filter((r:any)=>r.property===property).length,0,'Unlisted owner disappears from category listings');
+  await saveStatus('Listed');
+  assert.equal((await listings()).find((r:any)=>r.property===property).id,original.id,'Relisting restores the same category row');
+  const restored=(await listings()).find((r:any)=>r.property===property);
+  const deleted=await fetch(base+'/api/listings/'+restored.id,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:restored.version})});
+  assert.equal(deleted.status,200);assert.equal((await listings()).some((r:any)=>r.property===property),false);
+  await saveStatus('Unlisted');await saveStatus('Listed');
+  assert.equal((await listings()).find((r:any)=>r.property===property).id,original.id,'Deleted category listing returns after owner is relisted');
   await modal.getByRole('button',{name:'Edit property',exact:true}).click();
   const form=page.getByRole('dialog');
   assert.equal(await form.getByLabel('Where should this listing be appended?').count(),0);
@@ -34,11 +48,20 @@ try {
   await form.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.getByRole('button',{name:'+ Add owner listing',exact:true}).click();
   const add=page.getByRole('dialog');
-  await add.getByLabel('Status',{exact:true}).selectOption('Listed');
-  await add.getByLabel('Where should this listing be appended?').selectOption('rent');
+  assert.equal(await add.getByLabel('Status',{exact:true}).inputValue(),'Unlisted');
+  await add.getByLabel('Listing type',{exact:true}).selectOption('rent');
+  const manual=property+' manual rental';
+  await add.getByLabel('Owner name',{exact:true}).fill('Sample owner');
+  await add.getByLabel('Phone number',{exact:true}).fill('012345');
+  await add.getByLabel('Property name',{exact:true}).fill(manual);
+  await add.getByLabel('Location',{exact:true}).fill('Ampang');
+  await add.getByLabel('Property price',{exact:true}).fill('400000');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-  await add.getByRole('button',{name:'Cancel',exact:true}).click();
+  await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/owner-listings')&&r.request().method()==='POST'),add.getByRole('button',{name:'Save owner listing',exact:true}).click()]);
+  const manualOwner=(await owners()).find((r:any)=>r.propertyName===manual);
+  assert.equal(manualOwner.transactionType,'rent');assert.equal(manualOwner.status,'Unlisted');
+  assert.equal((await listings()).some((r:any)=>r.property===manual),false,'Unlisted manual entry does not prematurely publish');
  }
  assert.deepEqual(errors,[]);
- console.log('PASS mobile/desktop category prompt, blocked missing choice, persisted selection, linked row creation and owner edit/add forms');
+ console.log('PASS mobile/desktop manual listing type, missing-category prompt, Unlisted withdrawal, relisting restoration and deleted category row recovery');
 } finally {await browser.close();}

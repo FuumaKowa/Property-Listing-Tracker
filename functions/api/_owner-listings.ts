@@ -257,7 +257,7 @@ export async function handleOwnerListings(
         ? `DELETE FROM owner_listings l USING old o WHERE l.id=o.id AND l.version=$2 AND o.version=$2 AND $5 RETURNING l.*`
         : `UPDATE owner_listings l SET ${sets.join(",")} FROM old o WHERE l.id=o.id AND l.version=$2 AND o.version=$2 AND ${permission} AND ${changedCheck} AND ${categoryGuard} RETURNING l.*`;
     const rows = await db.query(
-      `WITH old AS MATERIALIZED(SELECT * FROM owner_listings WHERE id=$1 FOR UPDATE),changed AS(${mutation}),logged AS(INSERT INTO owner_listing_events(listing_id,action,actor_id,actor_name,note,before_record,after_record) SELECT ${kind === "delete" ? "NULL" : "c.id"},'${kind}',$3,$4,${noteParam},to_jsonb(o),${kind === "delete" ? "NULL" : "to_jsonb(c)"} FROM changed c JOIN old o ON c.id=o.id) ${(kind === 'update' || kind === 'activity') && body.status === 'Listed' ? ownerPromotionCtes('$3','$4',true) : ''} SELECT ${ownerColumns} FROM changed`,
+      `WITH old AS MATERIALIZED(SELECT * FROM owner_listings WHERE id=$1 FOR UPDATE),changed AS(${mutation}),logged AS(INSERT INTO owner_listing_events(listing_id,action,actor_id,actor_name,note,before_record,after_record) SELECT ${kind === "delete" ? "NULL" : "c.id"},'${kind}',$3,$4,${noteParam},to_jsonb(o),${kind === "delete" ? "NULL" : "to_jsonb(c)"} FROM changed c JOIN old o ON c.id=o.id) ${(kind === 'update' || kind === 'activity') && OWNER_STATUSES.includes(body.status) ? ownerPromotionCtes('$3','$4',true) : ''} SELECT ${ownerColumns} FROM changed`,
       paramsSql,
     );
     if (rows[0]) return json({ success: true, data: rows[0] });

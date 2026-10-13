@@ -193,7 +193,15 @@ export function OwnerForm({
               </select>
             </label>
           </div>
-          {form.status === 'Listed' && <OwnerListingDestination knownType={initial?.transactionType} value={form.transactionType} onChange={transactionType=>setForm({...form,transactionType})} />}
+          <label className="ui-label">Listing type
+            <select aria-label="Listing type" className={control} required={form.status === 'Listed'} disabled={!!initial?.transactionType} value={form.transactionType || ''} onChange={event=>setForm({...form,transactionType:event.target.value as 'rent'|'sale' || null})}>
+              <option value="">Not specified</option>
+              <option value="rent">Rental</option>
+              <option value="sale">Subsale Direct Listing</option>
+            </select>
+            {!form.transactionType && <span className="text-xs text-slate-500">Choose Rental or Subsale Direct Listing before saving as Listed.</span>}
+          </label>
+          {form.status === 'Listed' && form.transactionType && <OwnerListingDestination knownType={form.transactionType} value={form.transactionType} onChange={transactionType=>setForm({...form,transactionType})} />}
           {error && (
             <p role="alert" className="text-sm text-rose-700">
               {error}

@@ -17,8 +17,9 @@ async function update(id:number,body:any,action?:string) {
 }
 try {
  await pg.exec(`CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users VALUES(1,'admin','Admin','admin'),(2,'agent','Agent','user');
- CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text NOT NULL,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,created_by_user_id text,created_by_name text,updated_by_user_id text,updated_by_name text,last_updated_at timestamp,version integer DEFAULT 1,archived_at timestamp);
+ CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text NOT NULL,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,created_by_user_id text,created_by_name text,updated_by_user_id text,updated_by_name text,last_updated_at timestamp,version integer DEFAULT 1,archived_at timestamp,archived_by_name text);
  CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer,action text,changed_fields text,user_uid text,user_name text);`);
+ await pg.exec('CREATE TABLE listing_publications(id serial PRIMARY KEY,listing_id integer REFERENCES listings(id),url text)');
  await pg.exec(ownerListingsTableSql);
  for(const tag of ['0000_n8n_ingestion','0005_owner_workflow','0006_owner_selangor_coverage','0007_owner_contacted_stage']) await pg.exec(readFileSync(`drizzle/${tag}.sql`,'utf8'));
  await pg.exec("INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,transaction_type) VALUES('Existing','012','Previously listed','landed',100,'Listed','Admin','sale')");
@@ -42,13 +43,23 @@ try {
   assert.equal(listing.project_category,category);assert.equal(listing.no_tel,input.noTel);
   assert.equal(listing.status,'Active');assert.equal(listing.date,'','Do not invent an expiry date');assert.equal(listing.created_by_user_id,'1');
   assert.ok(listing.notes.includes('380000.25'));assert.ok(listing.notes.includes(input.propertyLink));
-  assert.equal((await update(owner.id,{status:'Unlisted'},'activity')).status,200);assert.equal((await update(owner.id,{status:'Listed'},'activity')).status,200);
+  await pg.query('INSERT INTO listing_publications(listing_id,url) VALUES($1,$2)',[listing.id,'https://example.com/saved-ad']);
+  assert.equal((await update(owner.id,{status:'Unlisted'},'activity')).status,200);
+  const withdrawn:any=(await pg.query('SELECT * FROM listings WHERE source_owner_listing_id=$1',[owner.id])).rows[0];
+  assert.ok(withdrawn.archived_at,'Unlisted owner must disappear from the active category sheet');
+  assert.equal(withdrawn.version,listing.version+1,'Withdrawal invalidates stale category saves');
+  assert.equal((await update(owner.id,{status:'Listed'},'activity')).status,200);
+  const restored:any=(await pg.query('SELECT * FROM listings WHERE source_owner_listing_id=$1',[owner.id])).rows[0];
+  assert.equal(restored.id,listing.id);assert.equal(restored.archived_at,null,'Relisting restores the previous category row');
+  assert.equal(restored.version,withdrawn.version+1);
+  assert.equal(restored.notes,listing.notes);assert.equal(restored.created_by_user_id,listing.created_by_user_id);
   assert.equal((await pg.query('SELECT * FROM listings WHERE source_owner_listing_id=$1',[owner.id])).rows.length,1);
   await pg.query("UPDATE listings SET status='Sold Out',archived_at=now() WHERE source_owner_listing_id=$1",[owner.id]);
   await update(owner.id,{status:'Unlisted'},'activity');
   await update(owner.id,{status:'Listed',transactionType:type==='rent'?'sale':'rent'},'activity');
   const preserved:any=(await pg.query('SELECT * FROM listings WHERE source_owner_listing_id=$1',[owner.id])).rows[0];
-  assert.equal(preserved.status,'Sold Out');assert.ok(preserved.archived_at);assert.equal(preserved.project_category,category);
+  assert.equal(preserved.status,'Sold Out');assert.equal(preserved.archived_at,null,'Deleted category row becomes visible again when owner is relisted');assert.equal(preserved.project_category,category);
+  assert.deepEqual((await pg.query('SELECT url FROM listing_publications WHERE listing_id=$1',[listing.id])).rows,[{url:'https://example.com/saved-ad'}]);
  }
  const unknown=(await (await call('POST',input)).json()).data;
  assert.equal((await update(unknown.id,{status:'Listed'},'activity')).status,400);
@@ -57,6 +68,9 @@ try {
  assert.equal((await pg.query<any>('SELECT transaction_type FROM owner_listings WHERE id=$1',[unknown.id])).rows[0].transaction_type,'rent');
  const edited=(await (await call('POST',input)).json()).data;
  assert.equal((await update(edited.id,{...input,status:'Listed',transactionType:'sale'})).status,200);
+ assert.equal((await update(edited.id,{status:'Rejected'},'activity')).status,200);
+ assert.ok((await pg.query<any>('SELECT archived_at FROM listings WHERE source_owner_listing_id=$1',[edited.id])).rows[0].archived_at);
+ assert.equal((await update(edited.id,{status:'Listed'},'activity')).status,200);
  assert.equal((await call('POST',{...input,status:'Listed'})).status,400);
  assert.equal((await call('POST',{...input,status:'Listed',transactionType:'rent'})).status,201);
  const unsupported=(await (await call('POST',input)).json()).data;
@@ -79,6 +93,8 @@ try {
  const assigned:any=(await pg.query('SELECT * FROM listings WHERE source_owner_listing_id=$1',[rollback.id])).rows[0];
  assert.equal(assigned.created_by_user_id,'2');assert.equal(assigned.pm,'Agent');assert.equal(assigned.agent,'Owner');
  assert.equal((await pg.query('SELECT * FROM listings')).rows.length,7);
- assert.equal((await pg.query('SELECT * FROM listing_audit_logs')).rows.length,7);
+ assert.equal((await pg.query("SELECT * FROM listing_audit_logs WHERE action='create'")).rows.length,7);
+ assert.equal((await pg.query("SELECT * FROM listing_audit_logs WHERE action='archive'")).rows.length,3);
+ assert.equal((await pg.query("SELECT * FROM listing_audit_logs WHERE action='restore'")).rows.length,5);
  console.log('PASS owner promotion: routing, missing/invalid choices, create/edit/follow-up, deduplication, permissions and audits');
 } finally {await pg.close();}

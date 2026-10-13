@@ -78,7 +78,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
         ? prev.map((r) => (r.id === row.id ? row : r))
         : [...prev, row],
     );
-    if(row.status === 'Listed') onListingsChanged?.();
+    onListingsChanged?.();
   };
   const results = useMemo(()=>browseOwners(rows,filters,pageSize,page,now),[rows,filters,pageSize,page,now]);
   const filtered=results.pageRows;

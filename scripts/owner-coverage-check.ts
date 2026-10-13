@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
+import {promotionFixture} from './owner-promotion-fixture';
 import { ownerListingsTableSql } from "../src/db/ownerListings";
 import { handleOwnerListings } from "../functions/api/_owner-listings";
 
@@ -33,8 +34,10 @@ const mappings = [
 ] as const;
 try {
   await pg.exec(
-    "CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text); INSERT INTO auth_users VALUES(1,'admin','Admin','admin'),(2,'shahril','Dr Shahril','user'),(3,'hakim','Hakim','user'),(4,'luqman','Luqman','user'),(5,'ikhwan','Ikhwan','user'),(6,'muz','Muz','user'); CREATE TABLE listings(id serial PRIMARY KEY,property text); INSERT INTO listings(property) VALUES('Normal listing unchanged');",
+    "CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text); INSERT INTO auth_users VALUES(1,'admin','Admin','admin'),(2,'shahril','Dr Shahril','user'),(3,'hakim','Hakim','user'),(4,'luqman','Luqman','user'),(5,'ikhwan','Ikhwan','user'),(6,'muz','Muz','user');",
   );
+  await promotionFixture(pg);
+  await pg.exec("INSERT INTO listings(property) VALUES('Normal listing unchanged')");
   await pg.exec(ownerListingsTableSql);
   await pg.exec(readFileSync("drizzle/0000_n8n_ingestion.sql", "utf8"));
   await pg.exec(readFileSync("drizzle/0005_owner_workflow.sql", "utf8"));

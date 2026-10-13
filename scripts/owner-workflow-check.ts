@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
+import {promotionFixture} from './owner-promotion-fixture';
 import express from "express";
 import { once } from "node:events";
 import { drizzle } from "drizzle-orm/pglite";
@@ -16,8 +17,11 @@ const { ownerListingsTableSql } = await import("../src/db/ownerListings");
 const pg = new PGlite();
 await pg.exec("SET TIME ZONE 'UTC'");
 await pg.exec(
-  `CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users(username,display_name,role) VALUES ('admin','Admin','admin'),('shahril','Dr Shahril','user'),('hakim','Hakim','user'),('luqman','Luqman','user'),('ikhwan','Ikhwan','user'),('muz','Muz','user');CREATE TABLE listings(id serial PRIMARY KEY,property text);INSERT INTO listings(property) VALUES('Normal untouched');`,
+  `CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users(username,display_name,role) VALUES ('admin','Admin','admin'),('shahril','Dr Shahril','user'),('hakim','Hakim','user'),('luqman','Luqman','user'),('ikhwan','Ikhwan','user'),('muz','Muz','user');`,
 );
+await promotionFixture(pg);
+await pg.exec("INSERT INTO listings(property) VALUES('Normal untouched')");
+const normalRowsBefore=(await pg.query('SELECT * FROM listings')).rows;
 await pg.exec(ownerListingsTableSql);
 await pg.exec(readFileSync("drizzle/0000_n8n_ingestion.sql", "utf8"));
 await pg.exec(
@@ -410,9 +414,7 @@ try {
   ).data;
   assert(history.some((h: any) => h.action === "assignment"));
   assert(history.some((h: any) => h.note === "Called owner"));
-  assert.deepEqual((await pg.query("SELECT * FROM listings")).rows, [
-    { id: 1, property: "Normal untouched" },
-  ]);
+  assert.deepEqual((await pg.query("SELECT * FROM listings")).rows, normalRowsBefore);
   assert.deepEqual(
     (
       await pg.query(
