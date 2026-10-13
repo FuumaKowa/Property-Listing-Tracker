@@ -27,7 +27,7 @@ import { Clock3 } from "lucide-react";
 import { ownerRowTone, OWNER_ROW_TONES } from "../utils/ownerRowColors";
 function OwnerOverdueBadge(){return <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-900" title="No agent activity for 3 days"><Clock3 className="h-3.5 w-3.5" aria-hidden="true"/>Overdue</span>;}
 const button = "ui-button";
-export function OwnerListingSheet() {
+export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>void}) {
   const { user } = useAuth(),
     admin = !!user && ["admin", "super_admin"].includes(user.role);
   const [rows, setRows] = useState<OwnerListing[]>([]),
@@ -72,12 +72,14 @@ export function OwnerListingSheet() {
     const timer = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(timer);
   }, []);
-  const saved = (row: OwnerListing) =>
+  const saved = (row: OwnerListing) => {
     setRows((prev) =>
       prev.some((r) => r.id === row.id)
         ? prev.map((r) => (r.id === row.id ? row : r))
         : [...prev, row],
     );
+    if(row.status === 'Listed') onListingsChanged?.();
+  };
   const results = useMemo(()=>browseOwners(rows,filters,pageSize,page,now),[rows,filters,pageSize,page,now]);
   const filtered=results.pageRows;
   const myCount=rows.filter(row=>row.assignedAgentId===user?.id).length;

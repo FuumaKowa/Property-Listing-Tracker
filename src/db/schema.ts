@@ -32,6 +32,7 @@ export const authSessions = pgTable('auth_sessions', {
 
 // Property listings table with audit tracking
 export const listings = pgTable('listings', {
+  sourceOwnerListingId: integer('source_owner_listing_id'),
   id: serial('id').primaryKey(),
   property: text('property').notNull(),
   projectCategory: text('project_category').notNull().default('Project Marketing (PM)'),
@@ -61,7 +62,7 @@ export const listings = pgTable('listings', {
   updatedByEmail: text('updated_by_email'),
   lastUpdatedAt: timestamp('last_updated_at').defaultNow(),
   createdAt: timestamp('created_at').defaultNow(),
-}, table => [check('listings_repost_mode_check', sql`${table.propertyGuruRepostMode} IN ('Manual', 'Auto')`)]);
+}, table => [uniqueIndex('listings_source_owner_listing_unique').on(table.sourceOwnerListingId),check('listings_repost_mode_check', sql`${table.propertyGuruRepostMode} IN ('Manual', 'Auto')`)]);
 
 export const publicationChannels = pgTable('publication_channels', {
   id: serial('id').primaryKey(), name: text('name').notNull(),

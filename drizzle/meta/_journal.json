@@ -57,6 +57,13 @@
       "when": 1791763200000,
       "tag": "0007_owner_contacted_stage",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791849600000,
+      "tag": "0008_owner_promotion",
+      "breakpoints": true
     }
   ]
 }

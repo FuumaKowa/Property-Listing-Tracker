@@ -7,6 +7,7 @@ import {
 } from "../../src/db/ownerListings";
 import { validateOwnerListing, OWNER_STATUSES, OWNER_SEEDING_STAGES } from "../../src/ownerListing";
 import { importOwners } from "./_owner-import";
+import { ownerPromotionCtes } from './_owner-promotion';
 
 interface Context {
   env: AuthEnv;
@@ -108,8 +109,9 @@ export async function handleOwnerListings(
       } catch (e) {
         return fail((e as Error).message);
       }
+      if (input.status === 'Listed' && !input.transactionType) return fail('Select Rental or Subsale Direct Listing before marking this property Listed.');
       const rows = await db.query(
-        `INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,property_link,location) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ${ownerColumns}`,
+        `WITH changed AS (INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,property_link,location,transaction_type) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *) ${input.status === 'Listed' ? ownerPromotionCtes('$11', '$7', false) : ''} SELECT ${ownerColumns} FROM changed`,
         [
           input.ownerName,
           input.noTel,
@@ -120,6 +122,8 @@ export async function handleOwnerListings(
           name,
           input.propertyLink || "",
           input.location || null,
+          input.transactionType || null,
+          ...(input.status === 'Listed' ? [user.id] : []),
         ],
       );
       return json({ success: true, data: rows[0] }, 201);
@@ -209,6 +213,16 @@ export async function handleOwnerListings(
       if (!admin) return fail("Only Admin can delete owner listings.", 403);
       kind = "delete";
     } else return fail("Method not allowed.", 405);
+    let categoryGuard = 'TRUE', categoryChangedCheck = 'FALSE';
+    if (kind === 'activity' || kind === 'update') {
+      if (body.transactionType !== undefined && body.transactionType !== null && !['rent','sale'].includes(body.transactionType)) return fail('Select Rental or Subsale Direct Listing.');
+      const selectedType = param(body.transactionType || null);
+      // A known source category cannot be overridden by a client selection.
+      const effectiveType = `CASE WHEN o.transaction_type IN ('rent','sale') THEN o.transaction_type ELSE coalesce(${selectedType}::text,o.transaction_type) END`;
+      categoryChangedCheck = `o.transaction_type IS DISTINCT FROM (${effectiveType})`;
+      sets.push(`transaction_type=${effectiveType}`);
+      if (body.status === 'Listed') categoryGuard = `(o.status='Listed' OR (${effectiveType}) IN ('rent','sale'))`;
+    }
     const noteParam = param(note);
     let changedCheck = "TRUE";
     if (kind === "activity") {
@@ -219,6 +233,7 @@ export async function handleOwnerListings(
         );
       if (body.status !== undefined)
         checks.push("o.status IS DISTINCT FROM " + param(body.status));
+      if (body.transactionType) checks.push(categoryChangedCheck);
       changedCheck = `(${noteParam}::text IS NOT NULL${checks.length ? " OR " + checks.join(" OR ") : ""})`;
     }
     if (kind !== "assignment" && kind !== "delete") {
@@ -240,15 +255,15 @@ export async function handleOwnerListings(
     const mutation =
       kind === "delete"
         ? `DELETE FROM owner_listings l USING old o WHERE l.id=o.id AND l.version=$2 AND o.version=$2 AND $5 RETURNING l.*`
-        : `UPDATE owner_listings l SET ${sets.join(",")} FROM old o WHERE l.id=o.id AND l.version=$2 AND o.version=$2 AND ${permission} AND ${changedCheck} RETURNING l.*`;
+        : `UPDATE owner_listings l SET ${sets.join(",")} FROM old o WHERE l.id=o.id AND l.version=$2 AND o.version=$2 AND ${permission} AND ${changedCheck} AND ${categoryGuard} RETURNING l.*`;
     const rows = await db.query(
-      `WITH old AS MATERIALIZED(SELECT * FROM owner_listings WHERE id=$1 FOR UPDATE),changed AS(${mutation}),logged AS(INSERT INTO owner_listing_events(listing_id,action,actor_id,actor_name,note,before_record,after_record) SELECT ${kind === "delete" ? "NULL" : "c.id"},'${kind}',$3,$4,${noteParam},to_jsonb(o),${kind === "delete" ? "NULL" : "to_jsonb(c)"} FROM changed c JOIN old o ON c.id=o.id) SELECT ${ownerColumns} FROM changed`,
+      `WITH old AS MATERIALIZED(SELECT * FROM owner_listings WHERE id=$1 FOR UPDATE),changed AS(${mutation}),logged AS(INSERT INTO owner_listing_events(listing_id,action,actor_id,actor_name,note,before_record,after_record) SELECT ${kind === "delete" ? "NULL" : "c.id"},'${kind}',$3,$4,${noteParam},to_jsonb(o),${kind === "delete" ? "NULL" : "to_jsonb(c)"} FROM changed c JOIN old o ON c.id=o.id) ${(kind === 'update' || kind === 'activity') && body.status === 'Listed' ? ownerPromotionCtes('$3','$4',true) : ''} SELECT ${ownerColumns} FROM changed`,
       paramsSql,
     );
     if (rows[0]) return json({ success: true, data: rows[0] });
     const current = (
       await db.query(
-        "SELECT version,assigned_agent_id FROM owner_listings WHERE id=$1",
+        "SELECT version,assigned_agent_id,status,transaction_type FROM owner_listings WHERE id=$1",
         [id],
       )
     )[0];
@@ -263,6 +278,7 @@ export async function handleOwnerListings(
         "This listing changed. Refresh and review before saving again.",
         409,
       );
+    if (body.status === 'Listed' && current.status !== 'Listed' && !['rent','sale'].includes(current.transaction_type as string) && !body.transactionType) return fail('Select Rental or Subsale Direct Listing before marking this property Listed.');
     return fail(
       "No change recorded. Add a note or choose a different stage/status.",
     );

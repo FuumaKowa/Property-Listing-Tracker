@@ -25,7 +25,7 @@ export const ownerListingsLinkSql = "ALTER TABLE owner_listings ADD COLUMN IF NO
 
 export const ownerColumns = `id, owner_name AS "ownerName", no_tel AS "noTel", property_name AS "propertyName",
   property_link AS "propertyLink", property_type AS "propertyType", property_price::text AS "propertyPrice", status,
-  location, version, created_at AT TIME ZONE 'UTC' AS "createdAt", assigned_agent_id AS "assignedAgentId", assigned_agent_name AS "assignedAgentName",
+  CASE WHEN transaction_type IN ('rent','sale') THEN transaction_type ELSE NULL END AS "transactionType", location, version, created_at AT TIME ZONE 'UTC' AS "createdAt", assigned_agent_id AS "assignedAgentId", assigned_agent_name AS "assignedAgentName",
   assigned_at AS "assignedAt", last_agent_activity_at AS "lastAgentActivityAt", seeding_status AS "seedingStatus",
   coalesce(last_agent_activity_at,assigned_at)+interval '3 days' AS "activityDueAt",
   (status='Unlisted' AND assigned_agent_id IS NOT NULL AND coalesce(last_agent_activity_at,assigned_at)+interval '3 days'<=now()) AS "needsAttention"`;

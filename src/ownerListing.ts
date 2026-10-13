@@ -4,6 +4,7 @@ export const OWNER_STATUSES = ['Listed', 'Unlisted', 'Rejected'] as const;
 export const OWNER_SEEDING_STAGES = ['IFU1', 'IFU2', 'IFU3', 'Contacted'] as const;
 
 export interface OwnerListingInput {
+  transactionType?: 'rent' | 'sale' | null;
   location?: string;
   version?: number;
   ownerName: string;
@@ -41,6 +42,7 @@ export function safePropertyLink(value: unknown): string | null {
 export function validateOwnerListing(value: unknown): OwnerListingInput {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid owner listing.');
   const input = value as Record<string, unknown>;
+  if (input.transactionType !== undefined && input.transactionType !== null && !['rent', 'sale'].includes(input.transactionType as string)) throw new Error('Select Rental or Subsale Direct Listing.');
   const text = (key: string, label: string, max: number) => {
     if (typeof input[key] !== 'string' || !input[key].trim()) throw new Error(`${label} is required.`);
     const result = input[key].trim();
@@ -61,5 +63,5 @@ export function validateOwnerListing(value: unknown): OwnerListingInput {
   const propertyPrice = text('propertyPrice', 'Property price', 19);
   if (!/^\d{1,16}(\.\d{1,2})?$/.test(propertyPrice)) throw new Error('Property price must be a non-negative amount with up to 16 digits and 2 decimal places.');
   if(input.location!==undefined&&(typeof input.location!=='string'||input.location.length>300))throw new Error('Location must be at most 300 characters.');
-  return { location:typeof input.location==='string'?input.location.trim():undefined,version:typeof input.version==='number'?input.version:undefined,ownerName, noTel, propertyName, propertyLink, propertyPrice, propertyType: input.propertyType as OwnerListingInput['propertyType'], status: input.status as OwnerListingInput['status'] };
+  return { transactionType: input.transactionType as OwnerListingInput['transactionType'], location:typeof input.location==='string'?input.location.trim():undefined,version:typeof input.version==='number'?input.version:undefined,ownerName, noTel, propertyName, propertyLink, propertyPrice, propertyType: input.propertyType as OwnerListingInput['propertyType'], status: input.status as OwnerListingInput['status'] };
 }

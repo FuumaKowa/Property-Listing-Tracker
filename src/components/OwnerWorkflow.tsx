@@ -16,6 +16,7 @@ import {
 } from "../services/ownerListings";
 import { ModalFrame } from "./Modals/ModalFrame";
 import { formatDateTime } from "../utils/datePresentation";
+import { OwnerListingDestination } from './OwnerListingDestination';
 export const ownerPrice = (price: string) => {
   const [w, f = "00"] = price.split(".");
   return (
@@ -121,6 +122,7 @@ export function OwnerWorkflowCard({
 }) {
   const [stage, setStage] = useState(row.seedingStatus || ""),
     [status, setStatus] = useState(row.status),
+    [transactionType, setTransactionType] = useState(row.transactionType),
     [note, setNote] = useState(""),
     [target, setTarget] = useState(String(row.assignedAgentId || "")),
     [busy, setBusy] = useState(false),
@@ -131,6 +133,7 @@ export function OwnerWorkflowCard({
     let active = true;
     setStage(row.seedingStatus || "");
     setStatus(row.status);
+    setTransactionType(row.transactionType);
     setTarget(String(row.assignedAgentId || ""));
     setHistoryError("");
     fetchOwnerHistory(row.id)
@@ -145,7 +148,7 @@ export function OwnerWorkflowCard({
     };
   }, [row.id, row.version]);
   const dirty =
-    !!note || stage !== (row.seedingStatus || "") || status !== row.status;
+    !!note || stage !== (row.seedingStatus || "") || status !== row.status || transactionType !== row.transactionType;
   async function run(action: () => Promise<OwnerListing>) {
     setBusy(true);
     setError("");
@@ -256,6 +259,7 @@ export function OwnerWorkflowCard({
               <select
                 className="ui-input"
                 value={status}
+                aria-label="Status"
                 onChange={(e) => setStatus(e.target.value as typeof status)}
               >
                 {OWNER_STATUSES.map((s) => (
@@ -264,6 +268,7 @@ export function OwnerWorkflowCard({
               </select>
             </label>
           </div>
+          {status === 'Listed' && <OwnerListingDestination knownType={row.transactionType} value={transactionType} onChange={setTransactionType} />}
           <label className="ui-label">
             Follow-up note
             <textarea
@@ -277,12 +282,14 @@ export function OwnerWorkflowCard({
           </label>
           <button
             className="ui-button ui-primary"
+            disabled={status === 'Listed' && !transactionType}
             onClick={() =>
               run(() =>
                 saveOwnerActivity(row.id, {
                   version: row.version!,
                   seedingStatus: stage || null,
                   status,
+                  ...(status === 'Listed' && transactionType ? {transactionType} : {}),
                   ...(note.trim() ? { note } : {}),
                 }),
               )

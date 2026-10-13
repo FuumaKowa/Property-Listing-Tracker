@@ -27,6 +27,8 @@
     "test:owner-import": "tsx scripts/owner-import-file-check.ts && tsx scripts/owner-import-check.ts",
     "test:owner-workflow": "tsx scripts/owner-workflow-check.ts && tsx scripts/owner-api-check.ts && tsx scripts/owner-coverage-check.ts",
     "test:owner-browsing": "tsx scripts/owner-browsing-check.ts",
+    "test:owner-promotion": "tsx scripts/owner-promotion-check.ts",
+    "test:owner-promotion-ui": "tsx scripts/owner-promotion-ui-check.ts",
     "test:owner-colors": "tsx scripts/owner-colors-check.ts"
   },
   "dependencies": {

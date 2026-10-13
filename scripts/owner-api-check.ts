@@ -3,6 +3,7 @@
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
+import { promotionFixture } from './owner-promotion-fixture';
 import { handleOwnerListings } from '../functions/api/_owner-listings';
 import { ownerListingsTableSql, ownerListingsLinkSql, OwnerListingDb } from '../src/db/ownerListings';
 
@@ -38,6 +39,7 @@ try {
   await postgres.exec(`CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users VALUES(1,'tester','Test User','admin')`);
   await postgres.exec(readFileSync('drizzle/0000_n8n_ingestion.sql','utf8'));
   await postgres.exec(readFileSync('drizzle/0005_owner_workflow.sql','utf8'));
+  await promotionFixture(postgres);
   const legacy = (await (await call('GET')).json()).data[0];
   assert.equal(legacy.propertyLink, '', 'Existing records gain an empty link without losing their data');
   assert.equal(legacy.propertyName, 'Legacy property');
@@ -49,7 +51,7 @@ try {
   assert.equal(row.propertyPrice, input.propertyPrice, 'Price must retain all decimal digits');
   assert.equal(row.propertyLink, input.propertyLink);
   assert.equal(row.noTel, input.noTel, 'Phone must preserve leading zeros and +');
-  const edited = { ...input, propertyType: 'commercial', status: 'Listed', propertyPrice: '250000.00' };
+  const edited = { ...input, transactionType: 'sale', propertyType: 'commercial', status: 'Listed', propertyPrice: '250000.00' };
   assert.equal((await call('PATCH', edited, String(row.id))).status, 200);
   const persisted = (await (await call('GET')).json()).data[0];
   assert.equal(persisted.status, 'Listed');

@@ -266,7 +266,7 @@ function Workspace() {
       {/* 3. Main Workspace: Master Spreadsheet Grid & Optional AI Studio Assistant Sidebar */}
       <main className="flex min-h-0 min-w-0 flex-1 md:overflow-hidden">
         {/* Master Spreadsheet Table Area */}
-        {activeSheet === OWNER_SHEET ? <OwnerListingSheet /> : <MasterPropertyGrid
+        {activeSheet === OWNER_SHEET ? <OwnerListingSheet onListingsChanged={()=>void refreshListings()} /> : <MasterPropertyGrid
           listings={sheetListings}
           publicationVersion={publicationVersion}
           onViewListing={item => setDetailId(item.id)}

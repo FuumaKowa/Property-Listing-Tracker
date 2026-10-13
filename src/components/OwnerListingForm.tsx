@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { OwnerListingDestination } from './OwnerListingDestination';
 import {
   OwnerListing,
   OwnerListingInput,
@@ -192,6 +193,7 @@ export function OwnerForm({
               </select>
             </label>
           </div>
+          {form.status === 'Listed' && <OwnerListingDestination knownType={initial?.transactionType} value={form.transactionType} onChange={transactionType=>setForm({...form,transactionType})} />}
           {error && (
             <p role="alert" className="text-sm text-rose-700">
               {error}

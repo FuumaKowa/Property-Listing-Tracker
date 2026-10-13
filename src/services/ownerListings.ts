@@ -73,6 +73,7 @@ export const saveOwnerActivity = (
     version: number;
     seedingStatus?: string | null;
     status?: string;
+    transactionType?: 'rent' | 'sale';
     note?: string;
   },
 ) =>
