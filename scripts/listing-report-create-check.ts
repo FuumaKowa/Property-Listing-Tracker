@@ -19,7 +19,7 @@ try{
  assert.equal((await pg.query('SELECT * FROM listings')).rows.length,0,'Preview is read-only');
  const input={mode:'commit',report,listingId:null,createNew:true,category:'Subsale Direct Listing (SSDL)',links:p.links.filter((l:any)=>l.url&&!l.issue).map((l:any)=>({url:l.url,label:l.label,channelId:l.channelId}))};
  response=await call('listing-report',input);assert.equal(response.status,200,await response.clone().text());const result=(await response.json()).data;assert.ok(result.listingId);
- const row=(await pg.query<any>('SELECT * FROM listings')).rows[0];assert.equal(row.status,'Pending');assert.ok(row.notes.includes('RM1,550,000'));assert.ok(row.notes.includes('Pending details'));assert.equal(row.agent,'Sample Owner');assert.equal((await pg.query('SELECT * FROM listing_publications')).rows.length,2);
+ const row=(await pg.query<any>('SELECT * FROM listings')).rows[0];assert.equal(row.location,'Shah Alam');assert.equal(row.status,'Pending');assert.ok(row.notes.includes('RM1,550,000'));assert.ok(row.notes.includes('Pending details'));assert.equal(row.agent,'Sample Owner');assert.equal((await pg.query('SELECT * FROM listing_publications')).rows.length,2);
  assert.equal((await call('listing-report',input)).status,200);assert.equal((await pg.query('SELECT * FROM listings')).rows.length,1,'Retry never creates another property');assert.equal((await pg.query('SELECT * FROM listing_publications')).rows.length,2,'Links deduplicate');
  p=(await (await call('listing-report',{mode:'preview',report})).json()).data;assert.equal(p.selectedListingId,row.id,'Reference matches an existing property');
  assert.equal((await call('listing-report',{...input,listingId:row.id,version:0})).status,400);
@@ -49,6 +49,13 @@ try{
  response=await call('listing-report',{mode:'commit',report:existingReport,listingId:null,createNew:true,category:'Subsale Direct Listing (SSDL)',links:[{channelId:1,url:'https://t.me/sample/existing'}]});assert.equal(response.status,200);const originalCategory=(await response.json()).data.listingId;
  p=(await (await call('summary-report',{mode:'preview',report:'*15/10/2026*\n1. WTS-202610-00910\n- Name: Existing Sample Owner\n- Contact: 0120004567\n- Property: Existing Sample Gardens'})).json()).data;
  response=await call('summary-report',{mode:'commit',reportId:p.reportId,choices:[{row:1,ownerId:existing.id,version:existing.version}]});assert.equal(response.status,200,await response.clone().text());const same=(await pg.query<any>("SELECT * FROM listings WHERE property='Existing Sample Gardens'")).rows;assert.equal(same.length,1,'Existing owners must reuse the advertisement report category row');assert.equal(same[0].id,originalCategory);assert.equal(same[0].source_owner_listing_id,existing.id);
+ const rental='*FOR RENT | SURIA JELUTONG BUKIT JELUTONG RM2,850*\nREF: WTL-202610-00912\n* Name: Fictional Owner\n* Contact: 0120006789';
+ response=await call('listing-report',{mode:'commit',report:rental,listingId:null,createNew:true,category:'Rental',links:[]});assert.equal(response.status,200);const rentalId=(await response.json()).data.listingId;
+ await pg.query("UPDATE listings SET location='Pending details',agent='Manually corrected owner',no_tel='0190009999' WHERE id=$1",[rentalId]);
+ let rentRow=(await pg.query<any>('SELECT * FROM listings WHERE id=$1',[rentalId])).rows[0];
+ response=await call('listing-report',{mode:'commit',report:rental,listingId:rentalId,version:rentRow.version,category:'Rental',links:[]});assert.equal(response.status,200,await response.clone().text());rentRow=(await pg.query<any>('SELECT * FROM listings WHERE id=$1',[rentalId])).rows[0];assert.equal(rentRow.location,'Bukit Jelutong','Re-import repairs a pending location even when this report was applied before');assert.equal(rentRow.agent,'Manually corrected owner');assert.equal(rentRow.no_tel,'0190009999');
+ await pg.query("UPDATE listings SET location='Verified location' WHERE id=$1",[rentalId]);
+ response=await call('listing-report',{mode:'commit',report:rental.replace('2,850','2,900'),listingId:rentalId,version:rentRow.version,category:'Rental',links:[]});assert.equal(response.status,200);assert.equal((await pg.query<any>('SELECT location FROM listings WHERE id=$1',[rentalId])).rows[0].location,'Verified location');
  actor=null;assert.equal((await call('listing-report',{mode:'preview',report})).status,401);
  console.log('PASS own listing report preview/create/retry/reference/ads, missing owner creation with unknown details and assignment pause');
 }finally{await pg.close();}

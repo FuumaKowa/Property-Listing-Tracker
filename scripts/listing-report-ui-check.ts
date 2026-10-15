@@ -6,13 +6,15 @@ const data=async(path:string)=>(await(await fetch(base+'/api/'+path)).json()).da
 try{
  const channels=await data('publication-channels');if(!channels.some((c:any)=>c.name==='Facebook')){const r=await fetch(base+'/api/publication-channels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Facebook'})});assert.equal(r.status,201);}
  for(const width of [390,1280]){
-  const page=await browser.newPage({viewport:{width,height:900}}),suffix=Date.now().toString().slice(-5),property=`UI Sample Terrace ${suffix}`;
+  const page=await browser.newPage({viewport:{width,height:900}}),suffix=Date.now().toString().slice(-5),property=`UI Sample Terrace ${suffix} Bukit Jelutong`;
   await page.goto(base);await page.getByRole('button',{name:'Rental',exact:true}).click();await page.getByRole('button',{name:'Paste property report',exact:true}).click();let modal=page.getByRole('dialog');
-  const report=`FOR RENT | ${property} • RM1,500\nREF: WTL-202610-${suffix}\n* Name: Fictional Contact\n* Contact: 012-0000001\n1. Telegram : https://t.me/sample/${suffix}\n14 Facebook Profile Sample : https://www.facebook.com/share/p/${suffix}/\n20. Whatsapp Broadcast : Done`;
+  const report=`*FOR RENT | ${property} RM1,500*\nREF: WTL-202610-${suffix}\n* Name: Fictional Contact\n* Contact: 012-0000001\n1. Telegram : https://t.me/sample/${suffix}\n14 Facebook Profile Sample : https://www.facebook.com/share/p/${suffix}/\n20. Whatsapp Broadcast : Done`;
   await modal.getByLabel('Property report',{exact:true}).fill(report);await modal.getByRole('button',{name:'Preview property report',exact:true}).click();await expect(modal.getByLabel('Listing match')).toHaveValue('new');await expect(modal.getByLabel('Destination category')).toHaveValue('Rental');
+  await expect(modal.getByLabel('Report location')).toHaveValue('Bukit Jelutong');
   await fetch(base+'/__preview/fail-next-save',{method:'POST'});await modal.getByRole('button',{name:/Import listing and/}).click();await modal.getByRole('alert').waitFor();await expect(modal.getByLabel('Property report',{exact:true})).toHaveValue(report);
   await modal.getByRole('button',{name:/Import listing and/}).click();await modal.getByRole('status').filter({hasText:/saved/}).waitFor();
   const listing=(await data('listings')).find((l:any)=>l.property===property);assert(listing);assert.equal(listing.status,'Pending');assert.equal(listing.projectCategory,'Rental');assert.ok(listing.notes.includes('RM1,500'));assert.ok(listing.notes.includes('Done'));
+  assert.equal(listing.location,'Bukit Jelutong');
   const ads=await data(`listings/${listing.id}/publications`);assert.equal(ads.length,2);
   // Same report finds its reference and keeps one property and two links.
   await modal.getByLabel('Property report',{exact:true}).fill(report);await modal.getByRole('button',{name:'Preview property report',exact:true}).click();await expect(modal.getByLabel('Listing match')).toHaveValue(String(listing.id));await modal.getByRole('button',{name:/Import listing and/}).click();await modal.getByRole('status').filter({hasText:/0 advertisement links added/}).waitFor();assert.equal((await data('listings')).filter((l:any)=>l.property===property).length,1);

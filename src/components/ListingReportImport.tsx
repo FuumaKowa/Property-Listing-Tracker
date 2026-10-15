@@ -2,22 +2,25 @@ import {useState} from 'react';
 import {ModalFrame} from './Modals/ModalFrame';
 import {PROJECT_CATEGORIES,type ProjectCategory,type PropertyListing} from '../types';
 import type {ListingReportPreview} from '../listingReport';
+import {isPendingReportLocation} from '../listingReport';
 import type {PublicationChannel} from '../publications';
 export function ListingReportImport({defaultCategory,listings,onClose,onImported}:{defaultCategory:ProjectCategory|'All';listings:PropertyListing[];onClose:()=>void;onImported:()=>void}){
  const [text,setText]=useState(''),[preview,setPreview]=useState<ListingReportPreview|null>(null),[channels,setChannels]=useState<PublicationChannel[]>([]),[listingId,setListingId]=useState(''),[category,setCategory]=useState<ProjectCategory|''>(''),[search,setSearch]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [links,setLinks]=useState<{url:string;label:string;channelId:number;selected:boolean}[]>([]);
+ const [location,setLocation]=useState('');
  async function request(body:object){const response=await fetch('/api/listings/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let result;try{result=await response.json();}catch{throw new Error('Unable to access listing reports. Please retry.');}if(!response.ok)throw new Error(result.error||'Unable to import report.');return result.data;}
  async function open(){setBusy(true);setError('');setMessage('');try{
   const channelResponse=await fetch('/api/publication-channels');const result=await channelResponse.json();if(!channelResponse.ok)throw new Error(result.error||'Unable to load publication channels.');
   const p:ListingReportPreview=await request({mode:'preview',report:text});setPreview(p);setChannels(result.data||[]);setSearch('');
   const target=p.candidates.find(c=>c.id===p.selectedListingId);setListingId(target?String(target.id):p.candidates.length?'':'new');
   setCategory(target?.projectCategory||p.category||(defaultCategory==='All'?'':defaultCategory));
+  setLocation(target&&!isPendingReportLocation(target.location)?target.location:p.location);
   setLinks(p.links.filter(l=>l.url&&!l.issue).map(l=>({url:l.url!,label:l.label,channelId:l.channelId||0,selected:!!l.channelId})));
  }catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  const candidates=[...(preview?.candidates||[]),...listings.filter(l=>search.trim()&&[l.property,l.location,l.agent].join(' ').toLowerCase().includes(search.toLowerCase())).slice(0,20)].filter((l,i,a)=>a.findIndex(c=>c.id===l.id)===i);
  const selected=links.filter(l=>l.selected&&l.channelId);
  async function apply(){if(!preview||!listingId||!category)return;setBusy(true);setError('');try{
-  const target=candidates.find(c=>c.id===Number(listingId));const result=await request({mode:'commit',report:text,listingId:listingId==='new'?null:Number(listingId),createNew:listingId==='new',version:target?.version,category,links:selected.map(({url,label,channelId})=>({url,label,channelId}))});
+  const target=candidates.find(c=>c.id===Number(listingId));const result=await request({mode:'commit',report:text,listingId:listingId==='new'?null:Number(listingId),createNew:listingId==='new',version:target?.version,category,location,links:selected.map(({url,label,channelId})=>({url,label,channelId}))});
   setMessage(`Listing #${result.listingId} saved · ${result.added} advertisement links added. ${listingId==='new'?'Missing details are pending; open Edit to complete them.':''}`);setPreview(null);setText('');onImported();
  }catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  return <ModalFrame title="Paste property report" subtitle="Match a listing or create one with pending details, and import its published ads." onClose={()=>{if(!busy)onClose();}}>
@@ -28,9 +31,10 @@ export function ListingReportImport({defaultCategory,listings,onClose,onImported
     <p className="break-words font-semibold">{preview.property}</p><p className="text-sm">{preview.reference||'No reference supplied'} · {preview.ownerName||'Owner pending'} · {preview.phone||'Contact pending'}{preview.price?` · RM${preview.price}`:''}</p>
     {preview.issue&&<p className="text-sm text-amber-800">{preview.issue}</p>}
     <label className="ui-label">Search existing listings<input className="ui-input mt-1" value={search} disabled={busy} onChange={e=>setSearch(e.target.value)} placeholder="Property name, location or owner"/></label>
-    <label className="ui-label">Listing match<select aria-label="Listing match" className="ui-input mt-1" disabled={busy} value={listingId} onChange={e=>{setListingId(e.target.value);const l=candidates.find(c=>c.id===Number(e.target.value));if(l?.projectCategory)setCategory(l.projectCategory);}}>
+    <label className="ui-label">Listing match<select aria-label="Listing match" className="ui-input mt-1" disabled={busy} value={listingId} onChange={e=>{setListingId(e.target.value);const l=candidates.find(c=>c.id===Number(e.target.value));if(l?.projectCategory)setCategory(l.projectCategory);setLocation(l&&!isPendingReportLocation(l.location)?l.location:preview.location);}}>
      <option value="">Choose a listing</option>{!preview.candidates.length&&<option value="new">Create new — pending details</option>}{candidates.map(l=><option key={l.id} value={l.id}>{l.property} · {l.projectCategory}{l.archivedAt?' (restore archived listing)':''}</option>)}
     </select></label>
+    <label className="ui-label">Location<input aria-label="Report location" className="ui-input mt-1" maxLength={300} value={location} disabled={busy||!isPendingReportLocation(candidates.find(c=>c.id===Number(listingId))?.location)} onChange={e=>setLocation(e.target.value)} placeholder="Not detected — enter the location or leave pending"/><span className="mt-1 text-xs font-normal text-slate-500">Detected from the report when clear. An existing completed location is preserved.</span></label>
     <label className="ui-label">Destination category<select aria-label="Destination category" className="ui-input mt-1" disabled={busy||listingId!=='new'} value={category} onChange={e=>setCategory(e.target.value as ProjectCategory)}><option value="">Choose category</option>{PROJECT_CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></label>
     <p className="text-sm text-slate-600">{listingId==='new'?'A new row will have Pending status. Complete the missing details using Edit.':'Existing property details and schedules are preserved. Report information is added to Notes.'}</p>
     <p className="text-sm">{links.length} usable links · {preview.links.length-links.length} blank, N/A or invalid entries skipped. Done entries remain in the report notes.</p>

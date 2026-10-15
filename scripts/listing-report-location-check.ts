@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {parseListingReport} from '../src/listingReport';
+const report='*FOR RENT | SURIA JELUTONG BUKIT JELUTONG RM2,850*\nREF: WTL-202610-00017\n* Name: Fictional Owner\n* Contact: 012-0001234\n1. Telegram : https://t.me/sample/5065';
+let p=parseListingReport(report,[]);
+assert.equal(p.property,'SURIA JELUTONG BUKIT JELUTONG','WhatsApp heading formatting is removed');
+assert.equal(p.location,'Bukit Jelutong');assert.equal(p.category,'Rental');assert.equal(p.price,'2,850');
+assert.equal(parseListingReport('FOR SALE | Sample Home, Port Klang RM500,000',[]).location,'Port Klang','Prefer the full locality over Klang');
+assert.equal(parseListingReport('FOR RENT | Sample Home, Kota Damansara RM1,000',[]).location,'Kota Damansara');
+assert.equal(parseListingReport('FOR RENT | Sample Home, Unknown District RM1,000',[]).location,'');
+assert.equal(parseListingReport('FOR RENT | Sample Home, Kajang or Bangi RM1,000',[]).location,'','Ambiguous localities require review');
+assert.equal(parseListingReport('FOR RENT | Sample Home RM1,000\n* Location: Custom District',[]).location,'Custom District');
+assert.equal(parseListingReport('FOR RENT | Sample Home, Existing Locality RM1,000',[],['Existing Locality, Selangor']).location,'Existing Locality');
+assert.throws(()=>parseListingReport('*FOR SALE | Sample Home*\nREF: WTL-202610-00017',[]),/conflicts/);
+console.log('PASS formatted headings, location extraction, specificity, explicit fields, existing localities and ambiguity');
