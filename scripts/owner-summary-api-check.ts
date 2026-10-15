@@ -50,6 +50,13 @@ try{
  const duplicate=(await (await call('POST',{mode:'preview',report:dup})).json()).data;assert(duplicate.rows.every((r:any)=>r.state==='pending'));
  const version=(await pg.query<any>('SELECT version FROM owner_listings WHERE id=1')).rows[0].version;
  const choicesDraft=[{row:1,ownerId:1,version,reference:'WTL-202610-00040'},{row:2,ownerId:null,reference:'WTL-202610-00041'}];
+ const deferredReport=dup+'\n3. WTS-202610-00042\n- Name: Sample Contact B\n- Contact: 017-0007775\n- Property: Laman Seri, Seksyen 27 Shah Alam';
+ const deferred=(await (await call('POST',{mode:'preview',report:deferredReport})).json()).data;
+ // Only row3 is ready; duplicate rows remain selected but explicitly deferred.
+ const owner2Version=(await pg.query<any>('SELECT version FROM owner_listings WHERE id=2')).rows[0].version;
+ const partial=await call('POST',{mode:'commit',reportId:deferred.reportId,choices:[{row:1,ownerId:1,version,reference:'WTL-202610-00040',defer:true},{row:2,ownerId:null,reference:'WTL-202610-00040',defer:true},{row:3,ownerId:2,version:owner2Version,reference:'WTS-202610-00042'}]});
+ assert.equal(partial.status,200,await partial.clone().text());const partialData=(await partial.json()).data;assert.equal(partialData.applied,1);assert.equal(partialData.pending,2);assert.equal(partialData.rows[0].selectedOwnerId,1,'Deferred manual selection is retained');
+ const empty=await call('POST',{mode:'commit',reportId:deferred.reportId,choices:[{row:1,ownerId:1,reference:'WTL-202610-00040',defer:true},{row:2,ownerId:null,defer:true}]});assert.equal(empty.status,400,'An apply with no ready rows must not silently succeed');
  const beforeDraft=(await pg.query('SELECT * FROM owner_listings ORDER BY id')).rows;
  const draft=await call('POST',{mode:'commit',saveOnly:true,reportId:duplicate.reportId,choices:choicesDraft});assert.equal(draft.status,200);assert.deepEqual((await pg.query('SELECT * FROM owner_listings ORDER BY id')).rows,beforeDraft);
  const saved=(await (await call('POST',{mode:'preview',reportId:duplicate.reportId})).json()).data;assert.equal(saved.rows[0].selectedOwnerId,1);assert.equal(saved.rows[1].entry.reference,'WTL-202610-00041');assert.equal(saved.rows[0].entry.issues.length,0);

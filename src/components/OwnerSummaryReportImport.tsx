@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { OwnerListing } from '../ownerListing';
 import type { SummaryCandidate, SummaryPreview, SummaryReportListItem, SummaryRow } from '../ownerSummaryReport';
+import {applySummaryReferenceEdits} from '../ownerSummaryReport';
 import { useAuth } from '../context/AuthContext';
 import { ModalFrame } from './Modals/ModalFrame';
 import { commitOwnerSummaryReport, listOwnerSummaryReports, previewOwnerSummaryReport, reopenOwnerSummaryReport } from '../services/ownerSummaryReports';
@@ -14,6 +15,9 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
   const [nextOffset,setNextOffset]=useState<number|null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice,setNotice]=useState('');
+  const feedback=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(error||notice){feedback.current?.scrollIntoView({block:'nearest'});feedback.current?.focus({preventScroll:true});}},[error,notice]);
   const [searches, setSearches] = useState<Record<number, string>>({});
   const [references, setReferences] = useState<Record<number, string>>({});
   const [manual, setManual] = useState<Record<number, boolean>>({});
@@ -24,7 +28,7 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
   }
   useEffect(() => { void loadRecent(); }, []);
   async function open(reportId?: string) {
-    setBusy(true); setError('');
+    setBusy(true); setError('');setNotice('');
     try {
       const next = reportId ? await reopenOwnerSummaryReport(reportId) : await previewOwnerSummaryReport(report);
       setPreview(next); setReferences({}); setSearches({}); setManual({});
@@ -43,30 +47,29 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
     setManual(previous => ({ ...previous, [row.entry.row]: true }));
     setPreview(previous => previous && ({ ...previous, rows: previous.rows.map(item => item.entry.row === row.entry.row ? { ...item, candidates: candidate && !item.candidates.some(value => value.id === candidate.id) ? [...item.candidates, candidate] : item.candidates, createNew:false, selectedOwnerId: id, selectedVersion: candidate?.version ?? null } : item) }));
   }
-  const selected = preview?.rows.filter(row => row.state !== 'applied' && (row.selectedOwnerId !== null || row.createNew)) || [];
+  const editedEntries=preview?applySummaryReferenceEdits(preview.rows.map(row=>row.entry),preview.rows.map(row=>({row:row.entry.row,reference:reference(row)}))):[];
+  const reviewedRows=preview?.rows.map((row,index)=>({...row,entry:editedEntries[index],issue:row.entry.issues.length&&row.issue===row.entry.issues.join(' ')?editedEntries[index].issues.join(' ')||undefined:row.issue}))||[];
+  const selected = reviewedRows.filter(row => row.state !== 'applied' && (row.selectedOwnerId !== null || row.createNew));
   const permitted = (row: SummaryRow) => {
     if(row.createNew)return !!row.canCreate;
     const owner = owners.find(item => item.id === row.selectedOwnerId);
     const candidate = row.candidates.find(item => item.id === row.selectedOwnerId);
     return owner ? canEdit(owner) : !!candidate?.canEdit;
   };
+  const ready=selected.filter(row=>{
+    const owner=owners.find(item=>item.id===row.selectedOwnerId),candidate=row.candidates.find(item=>item.id===row.selectedOwnerId),type=owner?.transactionType||candidate?.transactionType;
+    return !row.entry.issues.length&&permitted(row)&&(!type||type===row.entry.transactionType);
+  });
   async function apply(savePendingOnly = false) {
     if (!preview) return;
-    const refs = preview.rows.map(reference);
-    for (const row of savePendingOnly ? [] : selected) {
-      const ref = reference(row);
-      if (!/^WT[LS]-\d{6}-\d{5}$/i.test(ref)) { setError(`Row ${row.entry.row}: enter a reference such as WTL-202610-00018 or WTS-202610-00018.`); return; }
-      if (refs.filter(value => value.replace(/[\s/-]/g, '') === ref.replace(/[\s/-]/g, '')).length > 1) { setError(`Resolve duplicate reference ${ref} before applying.`); return; }
-      const category = ref.startsWith('WTL') ? 'rent' : 'sale';
-      const owner = owners.find(item => item.id === row.selectedOwnerId);
-      const candidate = row.candidates.find(item => item.id === row.selectedOwnerId);
-      if (!permitted(row)) { setError(`Row ${row.entry.row}: you do not have permission to update this owner.`); return; }
-      if ((owner?.transactionType || candidate?.transactionType) && category !== (owner?.transactionType || candidate?.transactionType)) { setError(`Row ${row.entry.row}: category conflict. Choose an owner in the matching category.`); return; }
-    }
+    setNotice('');
+    if(!savePendingOnly&&!ready.length){setError('No ready listings selected. Choose an owner or create a missing owner, and review the pending row issues.');return;}
     setBusy(true); setError('');
     try {
-      const next = await commitOwnerSummaryReport(preview.reportId, preview.rows.filter(row => row.state !== 'applied').map(row => ({ row: row.entry.row, ownerId: row.selectedOwnerId, ...(row.selectedVersion !== null ? { version: row.selectedVersion } : {}), reference: reference(row),createNew:!!row.createNew })), savePendingOnly);
+      const next = await commitOwnerSummaryReport(preview.reportId, reviewedRows.filter(row => row.state !== 'applied').map(row => ({ row: row.entry.row, ownerId: row.selectedOwnerId, ...(row.selectedVersion !== null ? { version: row.selectedVersion } : {}), reference: reference(row),createNew:!!row.createNew,defer:!ready.some(item=>item.entry.row===row.entry.row) })), savePendingOnly);
       setPreview(next);
+      const applied=next.applied-preview.applied;
+      setNotice(savePendingOnly?`Pending choices saved. ${next.pending} rows remain pending.`:applied>0?`Applied ${applied} listing${applied===1?'':'s'}. ${next.pending} rows remain pending for review.`:`No new listings were applied. ${next.pending} rows remain pending; review their matches and issues.`);
       if (next.applied > preview.applied) onImported();
       void loadRecent();
     } catch (e) { setError((e as Error).message); }
@@ -78,10 +81,10 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
       <button className="ui-button" disabled={busy || !report.trim()} onClick={() => void open()}>Preview report</button>
       {recent.some(item => item.pending > 0) && <div className="space-y-2"><p className="text-sm font-semibold">Saved pending reports</p>{recent.filter(item => item.pending > 0).map(item => <button key={item.id} className="ui-button block max-w-full whitespace-normal text-left" disabled={busy} onClick={() => void open(item.id)}>{new Date(item.createdAt).toLocaleString()} · {item.pending} pending / {item.total} rows</button>)}</div>}
       {nextOffset!==null&&<button className="ui-button" disabled={busy} onClick={()=>void loadRecent(true)}>Load older pending reports</button>}
-      {error && <p role="alert" className="break-words rounded bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {error && !preview && <p role="alert" className="break-words rounded bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {preview && <>
-        <p role="status" className="text-sm">{preview.applied} applied · {preview.pending} pending in saved report · {selected.length} selected to apply</p>
-        <div className="space-y-3">{preview.rows.map(row => {
+        <p role="status" className="text-sm">{preview.applied} applied · {preview.pending} pending in saved report · {ready.length} ready to apply</p>
+        <div className="space-y-3">{reviewedRows.map(row => {
           const choices = candidates(row);
           const ref = reference(row);
           return <article key={row.entry.row} className="min-w-0 space-y-2 rounded-xl border border-slate-200 p-3 text-sm">
@@ -98,8 +101,14 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
             </>}
           </article>;
         })}</div>
-        <button className="ui-button ui-primary" disabled={busy || !selected.length || selected.some(row => !permitted(row))} onClick={() => void apply()}>{busy ? 'Working…' : 'Apply matched listings'}</button>
+        <div ref={feedback} tabIndex={-1} className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        {error&&<p role="alert" className="break-words text-sm text-red-800">{error}</p>}
+        {notice&&<p role="status" className="break-words text-sm font-medium text-indigo-800">{notice}</p>}
+        <p className="text-sm">{ready.length} ready to apply. {selected.length-ready.length} selected rows need review and will stay pending.</p>
+        {!ready.length&&preview.pending>0&&<p className="text-sm text-amber-800">Confirm an owner match or choose to create a missing owner. Correct duplicate references and other row issues before applying.</p>}
+        <button className="ui-button ui-primary" disabled={busy || !ready.length} onClick={() => void apply()}>{busy ? 'Working…' : 'Apply matched listings'}</button>
         <button className="ui-button" disabled={busy || !user || !preview.rows.some(row => row.state !== 'applied')} onClick={() => void apply(true)}>Save pending changes</button>
+        </div>
       </>}
     </div>
   </ModalFrame>;

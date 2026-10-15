@@ -4,7 +4,7 @@ export interface SummaryCandidate { id:number; propertyName:string; ownerName:st
 export interface SummaryRow { entry:SummaryEntry; candidates:SummaryCandidate[]; selectedOwnerId:number|null; selectedVersion:number|null; createNew?:boolean; canCreate?:boolean; state:'ready'|'pending'|'applied'; issue?:string }
 export interface SummaryPreview { reportId:string; rows:SummaryRow[]; applied:number; pending:number }
 export interface SummaryReportListItem { id:string; createdAt:string; total:number; pending:number }
-export interface SummaryChoice { row:number; ownerId:number|null; version?:number; reference?:string;createNew?:boolean }
+export interface SummaryChoice { row:number; ownerId:number|null; version?:number; reference?:string;createNew?:boolean;defer?:boolean }
 const REFERENCE_ISSUE='Invalid reference; expected WTL/WTS-YYYYMM-NNNNN.';
 const DUPLICATE_ISSUE='Duplicate reference in this report.';
 export function applySummaryReferenceEdits(entries:SummaryEntry[],edits:{row:number;reference?:string}[]):SummaryEntry[] {

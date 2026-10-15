@@ -18,9 +18,9 @@ function choicesInput(raw:unknown):SummaryChoice[]{
  return raw.map(value=>{
   if(!value||typeof value!=='object'||!Number.isInteger(value.row)||value.row<1||seen.has(value.row))throw new SummaryInputError('Each report row must have one choice.');seen.add(value.row);
   if(value.ownerId!==null&&(!Number.isSafeInteger(value.ownerId)||value.ownerId<1))throw new SummaryInputError('Select a valid master owner listing.');
-  if(value.ownerId!==null&&(!Number.isInteger(value.version)||value.version<1))throw new SummaryInputError('Refresh the matches before applying.');
+  if(value.ownerId!==null&&value.defer!==true&&(!Number.isInteger(value.version)||value.version<1))throw new SummaryInputError('Refresh the matches before applying.');
   if(value.reference!==undefined&&(typeof value.reference!=='string'||value.reference.length>40))throw new SummaryInputError('Enter a valid WTL or WTS reference.');
-  return {row:value.row,ownerId:value.ownerId,version:value.version,reference:value.reference?.trim().toUpperCase(),createNew:value.createNew===true};
+  return {row:value.row,ownerId:value.ownerId,version:value.version,reference:value.reference?.trim().toUpperCase(),createNew:value.createNew===true,defer:value.defer===true};
  });
 }
 async function previewReport(record:StoredReport,env:AuthEnv,services:OwnerServices,user:AuthUser):Promise<SummaryPreview>{
@@ -83,7 +83,7 @@ export async function importOwnerSummaryReport(request:Request,env:AuthEnv,servi
   const saved={...record.choices};for(const c of choices)if(!record.outcomes?.[c.row])saved[c.row]=c;
   const entries=applySummaryReferenceEdits(original,Object.values(saved)),owners=await readOwnerListings(db),prepared:any[]=[],selectedIds=new Set<number>();
   for(const choice of choices){
-   if(body.saveOnly===true||(!choice.ownerId&&!choice.createNew)||record.outcomes?.[choice.row])continue;
+   if(body.saveOnly===true||choice.defer||(!choice.ownerId&&!choice.createNew)||record.outcomes?.[choice.row])continue;
    const entry=entries[choice.row-1],owner=owners.find(o=>o.id===choice.ownerId);
    if(entry.issues.length)return fail(`Row ${entry.row}: ${entry.issues.join(' ')}`);
    if(choice.createNew&&choice.ownerId)return fail('Choose either an existing owner or a new owner.');
@@ -97,6 +97,7 @@ export async function importOwnerSummaryReport(request:Request,env:AuthEnv,servi
    const key=await hash(JSON.stringify([entry.reference,entry.date,normalizeSummaryPhone(entry.phone),entry.ownerName.toLowerCase().replace(/\s+/g,' ').trim(),entry.property.toLowerCase().replace(/\s+/g,' ').trim()]));
    prepared.push({row:entry.row,ownerId:owner?.id||null,createNew:!!choice.createNew,property:entry.property,version:choice.version,reference:entry.reference,date:entry.date,ownerName:entry.ownerName,phone:entry.phone,type:entry.transactionType,key});
   }
+  if(body.saveOnly!==true&&!prepared.length&&!choices.some(c=>record.outcomes?.[c.row]))return fail('No ready listings were selected. Confirm an owner match or choose to create a missing owner, and resolve any row issues before applying.');
   if(!services.transact)throw new Error('Report transaction unavailable');
   const name=user.displayName||user.username,batch=crypto.randomUUID(),statements:{sql:string;params:any[]}[]=[
    {sql:"SET LOCAL lock_timeout='8s'",params:[]},
