@@ -14,7 +14,8 @@ export async function importListingReport(request:Request,env:AuthEnv,services:O
   if(!body||!['preview','commit'].includes(body.mode)||typeof body.report!=='string')return fail('Paste a property report first.');
   const db=services.connect(env),channels=await db.query('SELECT id,name,archived_at AS "archivedAt" FROM publication_channels');
   const listings=await db.query(`SELECT ${listingColumns} FROM listings`) as unknown as PropertyListing[];
-  let report;try{report=parseListingReport(body.report,channels as any,listings.map(l=>l.location||''));}catch(e){return fail((e as Error).message);}
+  const ownerLocations=await db.query("SELECT DISTINCT location FROM owner_listings WHERE location IS NOT NULL AND trim(location)<>''");
+  let report;try{report=parseListingReport(body.report,channels as any,[...listings.map(l=>l.location||''),...ownerLocations.map(o=>String(o.location))]);}catch(e){return fail((e as Error).message);}
   const refs=report.reference?await db.query(`SELECT listing_id FROM listing_report_references WHERE reference=$1 UNION SELECT l.id FROM listings l JOIN owner_listing_events e ON e.listing_id=l.source_owner_listing_id WHERE e.action='summary_report' AND e.after_record->>'reportReference'=$1`,[report.reference]):[];
   const byRef=listings.filter(l=>refs.some(r=>Number(r.listing_id)===l.id));
   const byName=listings.filter(l=>reportIdentity(reportPropertyName(l.property))===reportIdentity(report.property));

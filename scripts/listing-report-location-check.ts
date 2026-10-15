@@ -4,6 +4,9 @@ const report='*FOR RENT | SURIA JELUTONG BUKIT JELUTONG RM2,850*\nREF: WTL-20261
 let p=parseListingReport(report,[]);
 assert.equal(p.property,'SURIA JELUTONG BUKIT JELUTONG','WhatsApp heading formatting is removed');
 assert.equal(p.location,'Bukit Jelutong');assert.equal(p.category,'Rental');assert.equal(p.price,'2,850');
+assert.equal(parseListingReport('*FOR RENT | TANGERINE SUITES @ SUNSURIA CITY, SEPANG RM1600*',[]).location,'Sunsuria City, Sepang');
+assert.equal(parseListingReport('FOR SALE | Terrace @ Alam Impian, Shah Alam RM500000',[]).location,'Alam Impian, Shah Alam');
+assert.equal(parseListingReport('FOR SALE | Semi-D Temerloh, Pahang RM500000',[],['Temerloh / Bandar Temerloh, Pahang']).location,'Temerloh');
 assert.equal(parseListingReport('FOR SALE | Sample Home, Port Klang RM500,000',[]).location,'Port Klang','Prefer the full locality over Klang');
 assert.equal(parseListingReport('FOR RENT | Sample Home, Kota Damansara RM1,000',[]).location,'Kota Damansara');
 assert.equal(parseListingReport('FOR RENT | Sample Home, Unknown District RM1,000',[]).location,'');

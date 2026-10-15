@@ -9,10 +9,15 @@ export const reportPropertyName=(heading:string)=>heading.replace(/^[*_\s]+|[*_\
 const reportLocalities=['Bukit Jelutong','Shah Alam','Setia Alam','Alam Impian','Port Klang','Klang','Kapar','Petaling Jaya','Kota Damansara','Damansara','Sunway','Ampang','Puchong','Bandar Saujana Putra','Bandar Saujana Putera','Cyberjaya','Subang Jaya','Seri Kembangan','Bangi','Kajang','Semenyih','Sepang','Rawang','Puncak Alam','Sungai Buloh','Selayang','Bukit Beruntung','Putrajaya','Dengkil','Sentul','Sunsuria City','Kota Kemuning','Bandar Sungai Long','Beranang','Kuala Lumpur'];
 export function inferReportLocation(property:string,knownLocations:string[]=[]):string {
  const text=' '+reportIdentity(property)+' ';
- const locations=[...reportLocalities,...knownLocations.flatMap(l=>l.split(',').slice(0,1).map(part=>part.trim()))].filter(l=>!isPendingReportLocation(l)&&l.length>=4&&l.length<=300);
+ const locations=[...reportLocalities,...knownLocations.map(l=>l.split(/[,/]/)[0].replace(/^[\s-]+/,'').trim())].filter(l=>!isPendingReportLocation(l)&&l.length>=4&&l.length<=300);
  const found=locations.filter(l=>text.includes(' '+reportIdentity(l)+' ')).filter((l,i,a)=>a.findIndex(other=>reportIdentity(l)===reportIdentity(other))===i);
  const specific=found.filter(l=>!found.some(other=>other!==l&&(' '+reportIdentity(other)+' ').includes(' '+reportIdentity(l)+' ')));
- return specific.length===1?specific[0]:'';
+ if(specific.length===1)return specific[0];
+ // Multiple localities explicitly joined by commas form an address; "or", slash
+ // and other separators remain ambiguous and must be reviewed.
+ const positions=specific.map(location=>{const escaped=location.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'[\\s-]+');const match=new RegExp('\\b'+escaped+'\\b','i').exec(property);return {location,start:match?.index??-1,end:match?match.index+match[0].length:-1};}).sort((a,b)=>a.start-b.start);
+ if(positions.length>1&&positions.every(p=>p.start>=0)&&positions.slice(1).every((p,i)=>/^\s*,\s*$/.test(property.slice(positions[i].end,p.start))))return positions.map(p=>p.location).join(', ');
+ return '';
 }
 export function parseListingReport(raw:string,channels:PublicationChannel[],knownLocations:string[]=[]):ListingReportData {
  if(typeof raw!=='string'||raw.length>50000)throw new Error('Keep the report under 50,000 characters.');

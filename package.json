@@ -31,7 +31,8 @@
     "test:owner-promotion-ui": "tsx scripts/owner-promotion-ui-check.ts",
     "test:owner-summary": "tsx scripts/owner-summary-report-check.ts && tsx scripts/owner-summary-api-check.ts",
     "test:owner-colors": "tsx scripts/owner-colors-check.ts",
-    "test:listing-reports": "tsx scripts/listing-report-location-check.ts && tsx scripts/listing-report-create-check.ts"
+    "test:listing-reports": "tsx scripts/listing-report-location-check.ts && tsx scripts/listing-location-audit-check.ts && tsx scripts/listing-report-create-check.ts",
+    "audit:listing-locations": "tsx scripts/audit-listing-locations.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
