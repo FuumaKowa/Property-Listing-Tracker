@@ -1,4 +1,5 @@
 import {DailyWork} from './components/DailyWork';
+import {ListingReportImport} from './components/ListingReportImport';
 import type {WarningKey} from './utils/dailyWork';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
@@ -62,6 +63,7 @@ function Workspace() {
 
   // Modal States
   const [showArchive,setShowArchive]=useState(false);
+  const [showListingReport,setShowListingReport]=useState(false);
   const [archiveSelection,setArchiveSelection]=useState<PropertyListing[]>([]);
   const [archiving,setArchiving]=useState(false);
   const [workspaceError,setWorkspaceError]=useState('');
@@ -253,6 +255,7 @@ function Workspace() {
       </nav>
 
       {workspaceError&&<p role="alert" className="px-4 py-2 bg-rose-50 text-rose-700">{workspaceError} <button className="underline" onClick={refreshListings}>Refresh listings</button></p>}
+      {activeSheet!==OWNER_SHEET&&<div className="shrink-0 px-4 py-2"><button className="ui-button" onClick={()=>setShowListingReport(true)}>Paste property report</button></div>}
       {activeSheet!==OWNER_SHEET&&user&&<DailyWork listings={listings} user={user} onOpen={setDetailId} publicationVersion={publicationVersion} onIgnore={handleIgnoreWarning}/>}
       {/* 2. Optional Top KPI Metric Highlights */}
       {showKPIMetrics && activeSheet !== OWNER_SHEET && (
@@ -296,6 +299,7 @@ function Workspace() {
         <div className="flex justify-end gap-2"><button className="ui-button" disabled={archiving} onClick={()=>setArchiveSelection([])}>Cancel</button><button className="ui-button bg-indigo-600 text-white" disabled={archiving} onClick={confirmArchive}>{archiving?'Archiving…':'Confirm archive'}</button></div>
       </ModalFrame>}
       {showChannels && <PublicationChannelsModal onClose={() => setShowChannels(false)} onChanged={() => setPublicationVersion(n => n + 1)}/>}
+      {showListingReport&&<ListingReportImport defaultCategory={activeSheet===OWNER_SHEET?'All':activeSheet} listings={listings} onClose={()=>setShowListingReport(false)} onImported={()=>{void refreshListings();setPublicationVersion(n=>n+1);}}/>}
       {/* MODALS */}
       {/* 1. Add / Edit Listing Modal */}
       <ListingFormModal

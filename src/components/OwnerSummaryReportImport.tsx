@@ -41,10 +41,11 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
   function select(row: SummaryRow, id: number | null) {
     const candidate = candidates(row).find(item => item.id === id);
     setManual(previous => ({ ...previous, [row.entry.row]: true }));
-    setPreview(previous => previous && ({ ...previous, rows: previous.rows.map(item => item.entry.row === row.entry.row ? { ...item, candidates: candidate && !item.candidates.some(value => value.id === candidate.id) ? [...item.candidates, candidate] : item.candidates, selectedOwnerId: id, selectedVersion: candidate?.version ?? null } : item) }));
+    setPreview(previous => previous && ({ ...previous, rows: previous.rows.map(item => item.entry.row === row.entry.row ? { ...item, candidates: candidate && !item.candidates.some(value => value.id === candidate.id) ? [...item.candidates, candidate] : item.candidates, createNew:false, selectedOwnerId: id, selectedVersion: candidate?.version ?? null } : item) }));
   }
-  const selected = preview?.rows.filter(row => row.state !== 'applied' && row.selectedOwnerId !== null) || [];
+  const selected = preview?.rows.filter(row => row.state !== 'applied' && (row.selectedOwnerId !== null || row.createNew)) || [];
   const permitted = (row: SummaryRow) => {
+    if(row.createNew)return !!row.canCreate;
     const owner = owners.find(item => item.id === row.selectedOwnerId);
     const candidate = row.candidates.find(item => item.id === row.selectedOwnerId);
     return owner ? canEdit(owner) : !!candidate?.canEdit;
@@ -64,14 +65,14 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
     }
     setBusy(true); setError('');
     try {
-      const next = await commitOwnerSummaryReport(preview.reportId, preview.rows.filter(row => row.state !== 'applied').map(row => ({ row: row.entry.row, ownerId: row.selectedOwnerId, ...(row.selectedVersion !== null ? { version: row.selectedVersion } : {}), reference: reference(row) })), savePendingOnly);
+      const next = await commitOwnerSummaryReport(preview.reportId, preview.rows.filter(row => row.state !== 'applied').map(row => ({ row: row.entry.row, ownerId: row.selectedOwnerId, ...(row.selectedVersion !== null ? { version: row.selectedVersion } : {}), reference: reference(row),createNew:!!row.createNew })), savePendingOnly);
       setPreview(next);
       if (next.applied > preview.applied) onImported();
       void loadRecent();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
-  return <ModalFrame title="Paste listing report" subtitle="Preview and confirm existing owner matches. Unmatched rows stay pending; no owners are created." onClose={() => { if (!busy) onClose(); }}>
+  return <ModalFrame title="Paste listing report" subtitle="Review owner matches. Missing owners create new records with pending property details." onClose={() => { if (!busy) onClose(); }}>
     <div className="min-w-0 space-y-4">
       <label className="block text-sm font-medium">Listing report<textarea className="ui-input mt-1 min-h-40 w-full" value={report} onChange={event => setReport(event.target.value)} placeholder="Paste the full listing report here" disabled={busy}/></label>
       <button className="ui-button" disabled={busy || !report.trim()} onClick={() => void open()}>Preview report</button>
@@ -84,7 +85,7 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
           const choices = candidates(row);
           const ref = reference(row);
           return <article key={row.entry.row} className="min-w-0 space-y-2 rounded-xl border border-slate-200 p-3 text-sm">
-            <p className="font-semibold">Row {row.entry.row} · {row.entry.date || 'Date unavailable'} · {row.state === 'applied' ? 'Applied' : row.selectedOwnerId === null ? 'Pending' : manual[row.entry.row] ? 'Manually selected' : 'Automatically confirmed match'}</p>
+            <p className="font-semibold">Row {row.entry.row} · {row.entry.date || 'Date unavailable'} · {row.state === 'applied' ? 'Applied' : row.createNew ? 'New owner — pending details' : row.selectedOwnerId === null ? 'Pending' : manual[row.entry.row] ? 'Manually selected' : 'Automatically confirmed match'}</p>
             <label className="block">Reference<input className="ui-input mt-1 w-full" aria-label={`Reference for row ${row.entry.row}`} value={references[row.entry.row] ?? row.entry.reference} disabled={busy || row.state === 'applied'} onChange={event => setReferences(previous => ({ ...previous, [row.entry.row]: event.target.value }))}/></label>
             <p className="break-words">{row.entry.ownerName} · {row.entry.phone}<br/>{row.entry.property}</p>
             <p className="font-medium">{ref.startsWith('WTL') ? 'WTL → Rental' : ref.startsWith('WTS') ? 'WTS → Subsale Direct Listing' : 'Destination needs a valid reference'}</p>
@@ -92,6 +93,7 @@ export function OwnerSummaryReportImport({ owners, onClose, onImported }: { owne
             {row.state !== 'applied' && <>
               <label className="block">Search existing owners<input className="ui-input mt-1 w-full" aria-label={`Search existing owners for row ${row.entry.row}`} value={searches[row.entry.row] || ''} disabled={busy} placeholder="Property, owner or phone (first 15 matches)" onChange={event => setSearches(previous => ({ ...previous, [row.entry.row]: event.target.value }))}/></label>
               <label className="block">Confirm owner match<select className="ui-input mt-1 w-full min-w-0 max-w-full" aria-label={`Owner match for row ${row.entry.row}`} disabled={busy || !user} value={row.selectedOwnerId ?? ''} onChange={event => select(row, event.target.value ? Number(event.target.value) : null)}><option value="">Keep pending — no confirmed owner</option>{choices.map(candidate => <option key={candidate.id} value={candidate.id} disabled={!candidate.canEdit}>{candidate.propertyName} · {candidate.ownerName} · {candidate.noTel}{!candidate.canEdit ? ' (no permission)' : ''}</option>)}</select></label>
+              {row.canCreate&&<label className="flex items-center gap-2"><input type="checkbox" disabled={busy} checked={!!row.createNew} onChange={event=>{const checked=event.target.checked;setPreview(previous=>previous&&({...previous,rows:previous.rows.map(r=>r.entry.row===row.entry.row?{...r,createNew:checked,selectedOwnerId:null,selectedVersion:null}:r)}));}}/>Create missing owner and category row — details pending</label>}
               {choices.map(candidate => <p key={candidate.id} className="break-words text-xs text-slate-600">{candidate.id === row.selectedOwnerId ? 'Selected' : 'Suggestion'}: {candidate.propertyName} — {candidate.reason}</p>)}
             </>}
           </article>;

@@ -142,7 +142,7 @@ export const ownerListings = pgTable('owner_listings', {
   propertyName: text('property_name').notNull(),
   propertyLink: text('property_link').notNull().default(''),
   propertyType: text('property_type').notNull(),
-  propertyPrice: numeric('property_price', { precision: 18, scale: 2 }).notNull(),
+  propertyPrice: numeric('property_price', { precision: 18, scale: 2 }),
   status: text('status').notNull().default('Unlisted'),
   updatedByName: text('updated_by_name').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -152,7 +152,7 @@ export const ownerListings = pgTable('owner_listings', {
   check('owner_listings_owner_name_check', sql`length(trim(${table.ownerName})) BETWEEN 1 AND 200`),
   check('owner_listings_no_tel_check', sql`length(trim(${table.noTel})) BETWEEN 1 AND 50`),
   check('owner_listings_property_name_check', sql`length(trim(${table.propertyName})) BETWEEN 1 AND 300`),
-  check('owner_listings_property_type_check', sql`${table.propertyType} IN ('landed', 'highrise', 'land', 'commercial')`),
+  check('owner_listings_property_type_check', sql`${table.propertyType} IN ('landed', 'highrise', 'land', 'commercial', 'pending')`),
   check('owner_listings_property_price_check', sql`${table.propertyPrice} >= 0`),
   check('owner_listings_status_check', sql`${table.status} IN ('Listed', 'Unlisted', 'Rejected')`),
   uniqueIndex('owner_listings_source_listing_id_unique').on(table.source, table.externalListingId),
@@ -165,3 +165,5 @@ export const ownerListingEvents=pgTable('owner_listing_events',{
 export const ownerSummaryReports=pgTable('owner_summary_reports',{
  id:text('id').primaryKey(),createdBy:integer('created_by').references(()=>authUsers.id,{onDelete:'set null'}),reportText:text('report_text').notNull(),entryCount:integer('entry_count').notNull(),outcomes:jsonb('outcomes').notNull().default(sql`'{}'::jsonb`),choices:jsonb('choices').notNull().default(sql`'{}'::jsonb`),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
 },table=>[index('owner_summary_reports_creator_idx').on(table.createdBy,table.updatedAt.desc()),check('owner_summary_reports_id_check',sql`${table.id} ~ '^[a-f0-9]{64}$'`),check('owner_summary_reports_report_text_check',sql`length(${table.reportText}) BETWEEN 1 AND 50000`),check('owner_summary_reports_entry_count_check',sql`${table.entryCount} BETWEEN 1 AND 100`)]);
+
+export const listingReportReferences=pgTable('listing_report_references',{reference:text('reference').primaryKey(),listingId:integer('listing_id').notNull().references(()=>listings.id,{onDelete:'cascade'}),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow()},t=>[check('listing_report_references_reference_check',sql`length(${t.reference}) BETWEEN 1 AND 80`)]);

@@ -12,6 +12,7 @@ export function createOwnerListingsRouter(
   router.all(
     [
       "/owner-assignment-settings",
+      "/listings/report",
       "/owner-listings/import",
       "/owner-listings/summary-report",
       "/owner-listings",
@@ -20,7 +21,7 @@ export function createOwnerListingsRouter(
     ],
     async (req, res) => {
       const action =
-        req.path === '/owner-listings/summary-report' ? 'summary-report' : req.path === "/owner-listings/import"
+        req.path === '/listings/report' ? 'listing-report' : req.path === '/owner-listings/summary-report' ? 'summary-report' : req.path === "/owner-listings/import"
           ? "import"
           : req.path === "/owner-assignment-settings"
             ? "settings"

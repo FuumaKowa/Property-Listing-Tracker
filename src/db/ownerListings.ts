@@ -24,7 +24,7 @@ export const ownerListingsTableSql = `CREATE TABLE IF NOT EXISTS owner_listings 
 export const ownerListingsLinkSql = "ALTER TABLE owner_listings ADD COLUMN IF NOT EXISTS property_link TEXT NOT NULL DEFAULT ''";
 
 export const ownerColumns = `id, owner_name AS "ownerName", no_tel AS "noTel", property_name AS "propertyName",
-  property_link AS "propertyLink", property_type AS "propertyType", property_price::text AS "propertyPrice", status,
+  property_link AS "propertyLink", property_type AS "propertyType", coalesce(property_price::text,'') AS "propertyPrice", status,
   CASE WHEN transaction_type IN ('rent','sale') THEN transaction_type ELSE NULL END AS "transactionType", location, version, created_at AT TIME ZONE 'UTC' AS "createdAt", assigned_agent_id AS "assignedAgentId", assigned_agent_name AS "assignedAgentName",
   assigned_at AS "assignedAt", last_agent_activity_at AS "lastAgentActivityAt", seeding_status AS "seedingStatus",
   coalesce(last_agent_activity_at,assigned_at)+interval '3 days' AS "activityDueAt",

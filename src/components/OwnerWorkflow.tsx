@@ -18,6 +18,7 @@ import { ModalFrame } from "./Modals/ModalFrame";
 import { formatDateTime } from "../utils/datePresentation";
 import { OwnerListingDestination } from './OwnerListingDestination';
 export const ownerPrice = (price: string) => {
+  if(!price)return 'Pending details';
   const [w, f = "00"] = price.split(".");
   return (
     "RM " + w.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + f.padEnd(2, "0")

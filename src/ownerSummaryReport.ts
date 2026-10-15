@@ -1,10 +1,10 @@
 import type { OwnerListing } from './ownerListing';
 export interface SummaryEntry { row:number; reference:string; date:string|null; ownerName:string; phone:string; property:string; transactionType:'rent'|'sale'|null; issues:string[] }
 export interface SummaryCandidate { id:number; propertyName:string; ownerName:string; noTel:string; location?:string; transactionType?:'rent'|'sale'|null; version?:number; reason:string; canEdit:boolean }
-export interface SummaryRow { entry:SummaryEntry; candidates:SummaryCandidate[]; selectedOwnerId:number|null; selectedVersion:number|null; state:'ready'|'pending'|'applied'; issue?:string }
+export interface SummaryRow { entry:SummaryEntry; candidates:SummaryCandidate[]; selectedOwnerId:number|null; selectedVersion:number|null; createNew?:boolean; canCreate?:boolean; state:'ready'|'pending'|'applied'; issue?:string }
 export interface SummaryPreview { reportId:string; rows:SummaryRow[]; applied:number; pending:number }
 export interface SummaryReportListItem { id:string; createdAt:string; total:number; pending:number }
-export interface SummaryChoice { row:number; ownerId:number|null; version?:number; reference?:string }
+export interface SummaryChoice { row:number; ownerId:number|null; version?:number; reference?:string;createNew?:boolean }
 const REFERENCE_ISSUE='Invalid reference; expected WTL/WTS-YYYYMM-NNNNN.';
 const DUPLICATE_ISSUE='Duplicate reference in this report.';
 export function applySummaryReferenceEdits(entries:SummaryEntry[],edits:{row:number;reference?:string}[]):SummaryEntry[] {

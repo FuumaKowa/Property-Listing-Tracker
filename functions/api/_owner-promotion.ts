@@ -21,9 +21,10 @@ export function ownerPromotionCtes(actor: string, name: string, transitionOnly: 
  INSERT INTO listings(source_owner_listing_id,property,project_category,location,tenure,pm,negotiator,agent,no_tel,available_units,status,date,renew_status,notes,created_by_user_id,created_by_name,updated_by_user_id,updated_by_name,last_updated_at)
  SELECT c.id,c.property_name,CASE c.transaction_type WHEN 'rent' THEN 'Rental' ELSE 'Subsale Direct Listing (SSDL)' END,
  coalesce(nullif(trim(c.location),''),'Location not provided'),coalesce(nullif(c.tenure,''),'-'),coalesce(c.assigned_agent_name,${name}),
- coalesce(c.assigned_agent_name,${name}),c.owner_name,c.no_tel,'1','Active','','Not Renewed',
+ coalesce(c.assigned_agent_name,${name}),c.owner_name,c.no_tel,'1',CASE WHEN c.property_type='pending' THEN 'Pending' ELSE 'Active' END,'','Not Renewed',
  concat_ws(E'\\n','Owner: '||c.owner_name,'Price: RM '||c.property_price::text,'Property type: '||c.property_type,
- 'Original post: '||nullif(c.property_link,''),'Size: '||c.size,'Bedrooms: '||c.bedrooms::text,'Bathrooms: '||c.bathrooms::text),
+ 'Original post: '||nullif(c.property_link,''),'Size: '||c.size,'Bedrooms: '||c.bedrooms::text,'Bathrooms: '||c.bathrooms::text,
+ CASE WHEN c.property_type='pending' THEN 'Pending details: complete property type, price, location and listing information.' END),
  ${actor}::text,${name},${actor}::text,${name},now()
  FROM changed c ${transitionOnly ? 'JOIN old o ON o.id=c.id' : ''}
  LEFT JOIN category_before b ON b.source_owner_listing_id=c.id
