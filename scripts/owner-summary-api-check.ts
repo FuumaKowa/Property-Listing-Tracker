@@ -24,7 +24,7 @@ const report=`SUMMARY LISTING OCTOBER 2026
 try{
  await pg.exec("CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users VALUES(1,'admin','Admin','admin'),(2,'agent','Agent','user')");
  await pg.exec(ownerListingsTableSql);await promotionFixture(pg);
- for(const name of ['0000_n8n_ingestion','0005_owner_workflow','0006_owner_selangor_coverage','0007_owner_contacted_stage','0009_pause_owner_auto_assignment','0010_owner_summary_reports'])await pg.exec(readFileSync('drizzle/'+name+'.sql','utf8'));
+ for(const name of ['0000_n8n_ingestion','0005_owner_workflow','0006_owner_selangor_coverage','0007_owner_contacted_stage','0009_pause_owner_auto_assignment','0010_owner_summary_reports','0011_listing_report_creation'])await pg.exec(readFileSync('drizzle/'+name+'.sql','utf8'));
  await pg.exec("INSERT INTO owner_listings(owner_name,no_tel,property_name,property_type,property_price,status,updated_by_name,transaction_type) VALUES('Not captured','Not captured','Hyde Tower @ i-City, Shah Alam','highrise',450000,'Unlisted','Original','rent'),('Not captured','0170007775','Laman Seri, Seksyen 27 Shah Alam','landed',750000,'Unlisted','Original','sale'),('Not captured','Not captured','Palm Oil Farm, Klang','land',900000,'Unlisted','Original',NULL)");
  const previewResponse=await call('POST',{mode:'preview',report});assert.equal(previewResponse.status,200,'Summary report preview should be available');
  let preview=(await previewResponse.json()).data;assert.equal(preview.rows.length,3);assert.equal(preview.rows[0].state,'ready');assert.equal(preview.rows[1].state,'ready');assert.equal(preview.rows[2].state,'pending');
