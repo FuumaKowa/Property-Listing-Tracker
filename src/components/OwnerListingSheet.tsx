@@ -243,6 +243,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
                     "No.",
                     "Property address",
                     "Location",
+                    "Listing type",
                     "Owner",
                     "Phone",
                     "Type",
@@ -279,6 +280,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
                     </td>
                     {[
                       r.location || "Not provided",
+                      r.transactionType === 'rent' ? 'Rental' : r.transactionType === 'sale' ? 'Sale' : 'Not specified',
                       r.ownerName,
                       r.noTel,
                       r.propertyType,
@@ -317,6 +319,9 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
                   >
                     {r.propertyName}
                   </button>
+                  <p className="text-sm">
+                    Listing type: {r.transactionType === 'rent' ? 'Rental' : r.transactionType === 'sale' ? 'Sale' : 'Not specified'}
+                  </p>
                   <p className="text-sm">
                     {r.location || "Location not provided"} ·{" "}
                     {ownerPrice(r.propertyPrice)}
