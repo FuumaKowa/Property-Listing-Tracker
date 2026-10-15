@@ -13,13 +13,14 @@ export function createOwnerListingsRouter(
     [
       "/owner-assignment-settings",
       "/owner-listings/import",
+      "/owner-listings/summary-report",
       "/owner-listings",
       "/owner-listings/:id",
       "/owner-listings/:id/:action",
     ],
     async (req, res) => {
       const action =
-        req.path === "/owner-listings/import"
+        req.path === '/owner-listings/summary-report' ? 'summary-report' : req.path === "/owner-listings/import"
           ? "import"
           : req.path === "/owner-assignment-settings"
             ? "settings"

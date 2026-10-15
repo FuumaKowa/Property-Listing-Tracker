@@ -161,3 +161,7 @@ export const ownerListings = pgTable('owner_listings', {
 export const ownerListingEvents=pgTable('owner_listing_events',{
  id:serial('id').primaryKey(),listingId:integer('listing_id').references(()=>ownerListings.id,{onDelete:'set null'}),action:text('action').notNull(),actorId:integer('actor_id'),actorName:text('actor_name').notNull(),note:text('note'),beforeRecord:jsonb('before_record'),afterRecord:jsonb('after_record'),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
 },table=>[index('owner_listing_events_listing_idx').on(table.listingId,table.id)]);
+
+export const ownerSummaryReports=pgTable('owner_summary_reports',{
+ id:text('id').primaryKey(),createdBy:integer('created_by').references(()=>authUsers.id,{onDelete:'set null'}),reportText:text('report_text').notNull(),entryCount:integer('entry_count').notNull(),outcomes:jsonb('outcomes').notNull().default(sql`'{}'::jsonb`),choices:jsonb('choices').notNull().default(sql`'{}'::jsonb`),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+},table=>[index('owner_summary_reports_creator_idx').on(table.createdBy,table.updatedAt.desc()),check('owner_summary_reports_id_check',sql`${table.id} ~ '^[a-f0-9]{64}$'`),check('owner_summary_reports_report_text_check',sql`length(${table.reportText}) BETWEEN 1 AND 50000`),check('owner_summary_reports_entry_count_check',sql`${table.entryCount} BETWEEN 1 AND 100`)]);

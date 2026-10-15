@@ -22,6 +22,7 @@ import {
 } from "./OwnerWorkflow";
 import { OwnerForm } from "./OwnerListingForm";
 import { OwnerImportModal } from "./OwnerImportModal";
+import { OwnerSummaryReportImport } from "./OwnerSummaryReportImport";
 import { browseOwners, defaultOwnerFilters, type OwnerFilters } from "../utils/ownerBrowsing";
 import { Clock3 } from "lucide-react";
 import { ownerRowTone, OWNER_ROW_TONES } from "../utils/ownerRowColors";
@@ -50,7 +51,8 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
   const [editing, setEditing] = useState<OwnerListing | null | undefined>(),
     [detailId, setDetailId] = useState<number | null>(null),
     [showRules, setShowRules] = useState(false),
-    [showImport, setShowImport] = useState(false);
+    [showImport, setShowImport] = useState(false),
+    [showSummaryImport, setShowSummaryImport] = useState(false);
   async function refresh() {
     setLoading(true);
     setError("");
@@ -105,6 +107,9 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button className={button} onClick={() => setShowSummaryImport(true)}>
+              Paste listing report
+            </button>
             <button className={button} onClick={() => setShowImport(true)}>
               Import Excel / CSV
             </button>
@@ -387,6 +392,9 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
           onClose={() => setShowImport(false)}
           onImported={() => void refresh()}
         />
+      )}
+      {showSummaryImport && (
+        <OwnerSummaryReportImport owners={rows} onClose={() => setShowSummaryImport(false)} onImported={() => { void refresh(); onListingsChanged?.(); }} />
       )}
       {showRules && (
         <OwnerAssignmentRules

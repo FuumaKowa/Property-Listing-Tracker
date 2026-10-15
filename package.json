@@ -29,6 +29,7 @@
     "test:owner-browsing": "tsx scripts/owner-browsing-check.ts",
     "test:owner-promotion": "tsx scripts/owner-promotion-check.ts",
     "test:owner-promotion-ui": "tsx scripts/owner-promotion-ui-check.ts",
+    "test:owner-summary": "tsx scripts/owner-summary-report-check.ts && tsx scripts/owner-summary-api-check.ts",
     "test:owner-colors": "tsx scripts/owner-colors-check.ts"
   },
   "dependencies": {

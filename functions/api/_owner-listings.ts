@@ -8,6 +8,7 @@ import {
 import { validateOwnerListing, OWNER_STATUSES, OWNER_SEEDING_STAGES } from "../../src/ownerListing";
 import { importOwners } from "./_owner-import";
 import { ownerPromotionCtes } from './_owner-promotion';
+import { importOwnerSummaryReport } from './_owner-summary-report';
 
 interface Context {
   env: AuthEnv;
@@ -42,6 +43,7 @@ export async function handleOwnerListings(
   try {
     const user = await services.authenticate(request, env);
     if (!user) return authError();
+    if (action === 'summary-report') return await importOwnerSummaryReport(request,env,services,user);
     if (action === "import")
       return await importOwners(request, env, services, user);
     const db = services.connect(env),

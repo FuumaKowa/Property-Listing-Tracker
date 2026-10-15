@@ -64,6 +64,20 @@
       "when": 1791849600000,
       "tag": "0008_owner_promotion",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791849600001,
+      "tag": "0009_pause_owner_auto_assignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792022400000,
+      "tag": "0010_owner_summary_reports",
+      "breakpoints": true
     }
   ]
 }

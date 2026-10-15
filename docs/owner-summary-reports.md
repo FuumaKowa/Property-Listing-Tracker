@@ -1,0 +1,19 @@
+# Listing summary reports
+
+In Master Listing Owner, choose **Paste listing report**, paste a dated report and choose **Preview report**. Review the matches, then choose **Apply matched listings**. `WTL-YYYYMM-NNNNN` means Rental; `WTS-YYYYMM-NNNNN` means Subsale Direct Listing. Date headings use DD/MM/YYYY. Repeated numbering, WhatsApp formatting, invisible formatting characters and `Name` without a colon are supported.
+
+Confirmed entries update the existing master's owner name and phone, set seeding to Contacted and status to Listed, and create or restore its linked category row. Existing category rows receive the owner/contact and a readable report-information block in Notes containing the reference and report date. Original property, price, location, expiry, publication links and notes are preserved. The report date never becomes an expiry date. A repeated submission does not create another owner, category row or duplicate report update.
+
+Unmatched entries stay pending; this feature never creates master owner records. Use **Search existing owners** and **Confirm owner match** to resolve them. Generic descriptions such as Agricultural Land remain pending. Conflicting phones, multiple matching properties, incompatible Rental/Subsale types, repeated references and unavailable permissions require review. Correct duplicated references directly in the preview. Permissions do not disambiguate otherwise identical properties: only an unambiguous identity can be automatically selected, and only the assigned agent or Admin may apply it.
+
+**Save pending changes** stores references and manual selections without applying them. Saved pending reports can be reopened after closing the modal or reloading; **Load older pending reports** reaches older pages. Completed reports do not hide pending work. A failed apply retains the current UI selections; if a listing changed, reopen the report to review current versions before retrying.
+
+The creator and Admin can access a saved report. Reports contain owner/contact information and are stored in `owner_summary_reports`; they are not exposed through public endpoints. Reports are limited to 50,000 characters and 100 entries. Only reviewed selections are applied. A single transaction validates current permissions, owner versions, reference uniqueness and destination categories before changing owners, categories, report outcomes and audit history together. A failure rolls back the selected batch. Each semantic entry is recorded in owner history so retries and overlapping reports do not duplicate the operation.
+
+## Release
+
+Migration `0010_owner_summary_reports.sql` adds the saved-report table and creator/update index. It does not modify existing property data. Migration 0009 is included unchanged to reconcile the already-applied automatic-assignment pause; automatic assignment stays off. Run `npm run db:migrate` through the verified direct connection before deploying the API/UI; do not use `db:push`.
+
+An isolated production-derived Neon branch passed the exact migration and real Express/Pages adapter tests, including concurrent identical submissions, durable pending entries and restoration of the same archived category row. Recovery branch `summary-report-recovery-2026-10-15` (`br-quiet-cherry-b3l8h3yr`) was created before the production migration. Private row/schema verification fingerprints are retained under ignored `.server/` paths.
+
+Validation: `npm run test:owner-summary`, existing owner workflow/promotion/import suites, `npm run lint`, `npm run build`, Cloudflare Pages Functions compilation, and `node --import tsx scripts/owner-summary-ui-check.ts` against `npm run preview:integrated` using fictional records. The UI checks cover mobile/desktop preview, failed-save draft retention, category routing and reopening a saved manual pending match. Live verification must not apply the user's example report or modify real property records.

@@ -375,7 +375,7 @@ export function OwnerWorkflowCard({
             className="border-b border-slate-200 py-3 text-sm"
           >
             <p className="font-medium capitalize">
-              {h.action} · {h.actorName}
+              {h.action === 'summary_report' ? 'Listing report' : h.action} · {h.actorName}
             </p>
             <p className="text-xs text-slate-500">
               {formatDateTime(h.createdAt)}
