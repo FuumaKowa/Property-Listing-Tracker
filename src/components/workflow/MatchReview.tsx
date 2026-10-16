@@ -1,0 +1,10 @@
+import React from 'react';
+import {PROJECT_CATEGORIES} from '../../types';
+export interface WorkflowLinkChoices {ownerId?:number;listingId?:number;newOwner?:boolean;newListing?:boolean;category?:string}
+export function MatchReview({review,value,onChange,onOpen,busy}:{review:any;value:WorkflowLinkChoices;onChange:(v:WorkflowLinkChoices)=>void;onOpen:(id:string)=>void;busy:boolean}){
+ return <section className="wf-panel" style={{marginBottom:20}} aria-label="Review matching listings"><h3>Connect to the correct listing</h3><p className="wf-hint">Review these possible matches, then click Create workflow again. Existing records keep their history.</p>
+  {review.workflowId&&<button className="wf-button" disabled={busy} onClick={()=>onOpen(review.workflowId)}>Open existing workflow</button>}
+  {(['owners','listings'] as const).map(kind=>{const items=review.matches?.[kind]||[];if(!items.length)return null;const owner=kind==='owners',id=owner?value.ownerId:value.listingId,fresh=owner?value.newOwner:value.newListing;return <label className="wf-label" key={kind}>{owner?'Master Owner record':'Category listing'}<select disabled={busy} value={id|| (fresh?'new':'')} onChange={e=>onChange({...value,...(owner?{ownerId:e.target.value&&e.target.value!=='new'?Number(e.target.value):undefined,newOwner:e.target.value==='new'}:{listingId:e.target.value&&e.target.value!=='new'?Number(e.target.value):undefined,newListing:e.target.value==='new'})})}><option value="">Choose the matching record</option>{items.map((r:any)=><option key={r.id} value={r.id}>#{r.id} · {r.property} · {r.name||r.category} · {r.contact||'Contact pending'}</option>)}<option value="new">This is a different property — create a new record</option></select></label>;})}
+  {review.chooseCategory&&<label className="wf-label">Corresponding sheet<select value={value.category||''} disabled={busy} onChange={e=>onChange({...value,category:e.target.value})}><option value="">Choose a listing sheet</option>{PROJECT_CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></label>}
+ </section>;
+}

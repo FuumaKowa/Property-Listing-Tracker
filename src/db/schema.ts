@@ -167,3 +167,16 @@ export const ownerSummaryReports=pgTable('owner_summary_reports',{
 },table=>[index('owner_summary_reports_creator_idx').on(table.createdBy,table.updatedAt.desc()),check('owner_summary_reports_id_check',sql`${table.id} ~ '^[a-f0-9]{64}$'`),check('owner_summary_reports_report_text_check',sql`length(${table.reportText}) BETWEEN 1 AND 50000`),check('owner_summary_reports_entry_count_check',sql`${table.entryCount} BETWEEN 1 AND 100`)]);
 
 export const listingReportReferences=pgTable('listing_report_references',{reference:text('reference').primaryKey(),listingId:integer('listing_id').notNull().references(()=>listings.id,{onDelete:'cascade'}),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow()},t=>[check('listing_report_references_reference_check',sql`length(${t.reference}) BETWEEN 1 AND 80`)]);
+
+export const marketingWorkflows=pgTable('marketing_workflows',{
+ id:text('id').primaryKey(),reference:text('reference').notNull().unique(),ownerListingId:integer('owner_listing_id').unique().references(()=>ownerListings.id,{onDelete:'set null'}),listingId:integer('listing_id').unique().references(()=>listings.id,{onDelete:'set null'}),version:integer('version').notNull().default(1),data:jsonb('data').notNull(),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[check('marketing_workflow_reference_check',sql`length(${t.reference}) BETWEEN 1 AND 80`)]);
+export const marketingWorkflowRoles=pgTable('marketing_workflow_roles',{
+ userId:integer('user_id').primaryKey().references(()=>authUsers.id,{onDelete:'cascade'}),role:text('role').notNull(),
+},t=>[check('marketing_workflow_roles_role_check',sql`${t.role} IN ('coordinator','producer','reviewer','publisher','viewer')`)]);
+export const marketingWorkflowSessions=pgTable('marketing_workflow_sessions',{
+ sessionHash:text('session_hash').primaryKey().references(()=>authSessions.sessionTokenHash,{onDelete:'cascade'}),effectiveUserId:integer('effective_user_id').notNull().references(()=>authUsers.id,{onDelete:'cascade'}),csrf:text('csrf').notNull(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+});
+export const marketingWorkflowSwitches=pgTable('marketing_workflow_switches',{
+ id:serial('id').primaryKey(),actualUserId:integer('actual_user_id').references(()=>authUsers.id,{onDelete:'set null'}),actualName:text('actual_name').notNull(),fromName:text('from_name').notNull(),toName:text('to_name').notNull(),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+});

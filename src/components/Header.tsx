@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onListingsUpdated,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, logout } = useAuth();
+  const { user, logout, workflowEnabled } = useAuth();
 
   const handleExportCSV = () => {
     exportToCSV(listings);
@@ -84,6 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-6">
       <h1 className="text-sm font-bold">Property Listing Tracker</h1>
       <div className="flex items-center gap-2 text-sm">
+        {workflowEnabled&&<a className="ui-button" href="/workflow">Workflow</a>}
         {user?.role === 'super_admin' && <button className="rounded px-3 py-2 hover:bg-slate-100" onClick={onOpenUserManagement}>Users</button>}
         <button className="rounded px-3 py-2 hover:bg-slate-100" onClick={logout}>Sign out</button>
       </div>
@@ -109,6 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end sm:gap-2.5">
+        {workflowEnabled&&<a className="ui-button ui-primary" href="/workflow">Workflow</a>}
         <button className="ui-button" onClick={onOpenPublicationChannels}>Publication channels</button>
         <button className="ui-button" onClick={onOpenArchive}>Archived properties</button>
         {/* Main Action buttons */}

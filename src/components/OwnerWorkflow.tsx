@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import {LinkedWorkflowDetails} from './workflow/LinkedWorkflowDetails';
 import {
   type OwnerListing,
   OWNER_STATUSES,
@@ -173,6 +174,7 @@ export function OwnerWorkflowCard({
         if (canLeave()) onClose();
       }}
     >
+      <LinkedWorkflowDetails ownerId={row.id}/>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         {href ? (
           <a

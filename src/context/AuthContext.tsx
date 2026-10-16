@@ -10,6 +10,7 @@ export interface SessionUser {
 }
 
 interface AuthContextValue {
+  workflowEnabled: boolean;
   user: SessionUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<string | null>;
@@ -21,11 +22,12 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [workflowEnabled,setWorkflowEnabled]=useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me')
       .then((response) => response.json())
-      .then((data) => setUser(data.authenticated ? data.user : null))
+      .then((data) => {setUser(data.authenticated ? data.user : null);setWorkflowEnabled(data.workflowEnabled===true);})
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
@@ -39,6 +41,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = await response.json();
     if (!response.ok) return data.error || 'Unable to sign in.';
     setUser(data.user);
+    const current=await fetch('/api/auth/me').then(r=>r.json()).catch(()=>null);
+    setWorkflowEnabled(current?.workflowEnabled===true);
     return null;
   };
 
@@ -47,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, login, logout, workflowEnabled }}>{children}</AuthContext.Provider>;
 };
 
 export function useAuth() {

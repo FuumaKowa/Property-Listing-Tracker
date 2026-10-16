@@ -49,7 +49,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
   const resetFilters=()=>{setFilters({...defaultOwnerFilters});setPage(1);};
   useEffect(()=>{setPage(1);if(scrollArea.current)scrollArea.current.scrollTop=0;},[filters,pageSize]);
   const [editing, setEditing] = useState<OwnerListing | null | undefined>(),
-    [detailId, setDetailId] = useState<number | null>(null),
+    [detailId, setDetailId] = useState<number | null>(()=>Number(new URLSearchParams(window.location.search).get('ownerId'))||null),
     [showRules, setShowRules] = useState(false),
     [showImport, setShowImport] = useState(false),
     [showSummaryImport, setShowSummaryImport] = useState(false);

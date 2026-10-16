@@ -9,6 +9,7 @@ import express from 'express';
 import { PGlite } from '@electric-sql/pglite';
 
 import { readFileSync } from 'node:fs';
+import {resolve} from 'node:path';
 
 import { createServer } from 'vite';
 
@@ -75,13 +76,25 @@ const user={id:1,username:'preview',displayName:'Local preview - sample data',ro
 
 const app=express();app.use(express.json({limit:'1mb'}));
 
+if(process.env.WORKFLOW_DATABASE_PREVIEW==='1'){
+  const {databaseWorkflowPreview}=await import('./workflow-database-preview');
+  const {router,token}=await databaseWorkflowPreview(pg);
+  app.use('/api/workflow',(req,_res,next)=>{req.headers.cookie='property_tracker_session='+token;next();},router);
+}else if(process.env.WORKFLOW_PREVIEW==='1'){
+  const {LocalWorkflowStore}=await import('../src/server/workflow/store');
+  const {createWorkflowRouter}=await import('../src/server/workflow/router');
+  const {previewUsers}=await import('../src/workflow/seed');
+  const store=new LocalWorkflowStore(process.env.WORKFLOW_PREVIEW_DIR||'.server/workflow-preview');await store.init();
+  app.use('/api/workflow',createWorkflowRouter(store,async()=>previewUsers[0]));
+}
+
 let failNextSave=false;
 
 app.post('/__preview/fail-next-save',(_req,res)=>{failNextSave=true;res.json({success:true});});
 
 app.use('/api',(req,res,next)=>{if(failNextSave&&['POST','PATCH','DELETE'].includes(req.method)){failNextSave=false;res.status(503).json({success:false,error:'Simulated local preview save failure.'});return;}next();});
 
-app.get('/api/auth/me',(_req,res)=>res.json({authenticated:true,user}));
+app.get('/api/auth/me',(_req,res)=>res.json({authenticated:true,user,workflowEnabled:process.env.WORKFLOW_PREVIEW==='1'}));
 
 app.use('/api',createPublicationsRouter(()=>({DATABASE_URL:'local-only'}),{
 
@@ -114,6 +127,13 @@ app.get('/api/users',(_req,res)=>res.json({success:true,data:[]}));
 
 const previewPort = Number(process.env.PREVIEW_PORT || 4176);
 
-const vite=await createServer({envDir:'.server/preview-empty-env',server:{middlewareMode:true,hmr:{port:previewPort+1000}},appType:'spa'});app.use(vite.middlewares);
+const privateWorkflowDirectory=resolve(process.env.WORKFLOW_PREVIEW_DIR||'.server/workflow-preview').replace(/\\/g,'/');
+// Block private storage before any Vite static, transform or SPA middleware.
+app.use((req,res,next)=>{
+  let path:string;try{path=decodeURIComponent(req.path).replace(/\\/g,'/').toLowerCase();}catch{return void res.status(400).end();}
+  if(/(?:^|\/)\.(?:server|git)(?:\/|$)/.test(path)||path.includes(privateWorkflowDirectory.toLowerCase()))return void res.status(403).end();
+  next();
+});
+const vite=await createServer({envDir:'.server/preview-empty-env',server:{middlewareMode:true,fs:{deny:['.env','.env.*','*.{crt,pem}','**/.git/**','**/.server/**',privateWorkflowDirectory+'/**']},hmr:{port:previewPort+1000}},appType:'spa'});app.use(vite.middlewares);
 
 app.listen(previewPort,'127.0.0.1',()=>console.log(`Integrated preview: http://127.0.0.1:${previewPort} (synthetic local data only)`));

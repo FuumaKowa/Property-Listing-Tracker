@@ -1,4 +1,5 @@
 import {PublicationReportExport} from '../PublicationReportExport';
+import {LinkedWorkflowDetails} from '../workflow/LinkedWorkflowDetails';
 import {DataWarnings} from '../DailyWork';
 import type {WarningKey} from '../../utils/dailyWork';
 import React, { useEffect, useState } from "react";
@@ -83,6 +84,7 @@ export function PropertyDetailsModal({
         if (canClose()) onClose();
       }}
     >
+      <LinkedWorkflowDetails listingId={listing.id}/>
       <div className="mb-5 flex items-center justify-between">
         <h3 className="font-semibold">Property overview</h3>
         <button

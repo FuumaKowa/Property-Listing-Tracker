@@ -1,7 +1,7 @@
 import {DailyWork} from './components/DailyWork';
 import {ListingReportImport} from './components/ListingReportImport';
 import type {WarningKey} from './utils/dailyWork';
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { PropertyListing, FilterState, RenewStatus, ProjectCategory, PROJECT_CATEGORIES } from './types';
 import { saveListings } from './utils/storage';
@@ -26,12 +26,16 @@ import {
   deleteListingFromCloudSql,
 } from './services/api';
 
+const WorkflowApp=lazy(()=>import('./components/workflow/WorkflowApp'));
 export default function App() {
+  return <AuthenticatedApp/>;
+}
+function AuthenticatedApp() {
   const { user, loading } = useAuth();
   if (loading) {
     return <div className="flex h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading sign in...</div>;
   }
-  return user ? <Workspace /> : <LoginScreen />;
+  return user ? window.location.pathname==='/workflow'?<Suspense fallback={<div>Opening workflow…</div>}><WorkflowApp/></Suspense>:<Workspace /> : <LoginScreen />;
 }
 
 function Workspace() {
@@ -41,7 +45,7 @@ function Workspace() {
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All' | typeof OWNER_SHEET>('Project Marketing (PM)');
+  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All' | typeof OWNER_SHEET>(()=>new URLSearchParams(window.location.search).has('ownerId')?OWNER_SHEET:new URLSearchParams(window.location.search).has('listingId')?'All':'Project Marketing (PM)');
   const sheetNavigation = useRef<HTMLElement>(null);
   useEffect(() => {
     sheetNavigation.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -68,7 +72,7 @@ function Workspace() {
   const [archiving,setArchiving]=useState(false);
   const [workspaceError,setWorkspaceError]=useState('');
   const listingsRef=useRef(listings);listingsRef.current=listings;
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(()=>Number(new URLSearchParams(window.location.search).get('listingId'))||null);
   const [showChannels, setShowChannels] = useState(false);
   const [publicationVersion, setPublicationVersion] = useState(0);
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);

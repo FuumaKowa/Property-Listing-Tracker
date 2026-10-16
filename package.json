@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "preview:workflow": "tsx scripts/local-workflow-preview.ts",
+    "test:workflow": "tsx scripts/workflow-check.ts && tsx scripts/workflow-bulk-check.ts && tsx scripts/workflow-api-check.ts && tsx scripts/workflow-sync-check.ts && tsx scripts/workflow-production-check.ts",
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=.server/server.cjs",
     "start": "node .server/server.cjs",
