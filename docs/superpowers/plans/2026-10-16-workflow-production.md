@@ -12,10 +12,10 @@
 
 - [x] Add additive migration 0012 for workflow records, stable links, workflow user roles and session-scoped effective identity. Use actual Eypa/Luqman/Dr Shahril/Muz accounts. Keep previous application releases compatible.
 - [x] Test and implement matching and synchronization in `src/server/workflow/database.ts` and `sync.ts`: exact references/source links, conservative property/contact matching, manual resolution, repeat/concurrent creation, archived row restoration, changed-fields-only updates, owner permission withdrawal, unchanged notes and publication deduplication. PGlite tests exercise rollback as well as success.
-- [x] Add production `/api/workflow/*` handler with existing authentication, per-request real-user checks, CSRF, scoped switching, bounded validated uploads and authenticated R2 retrieval. Test isolation, logout/revocation, role denials and stale writes.
+- [x] Add production `/api/workflow/*` handler with existing authentication, per-request real-user checks, CSRF, scoped switching, bounded validated uploads and authenticated Neon media retrieval. Test isolation, logout/revocation, role denials and stale writes.
 - [x] Connect production UI: correct live labels and user names, visible owner/category links, manual match review, dashboard access after login, and workflow details in listing information. Preserve local sample preview behavior.
 - [x] Run model/API/database regressions, browser workflow tests, TypeScript, production build and Pages compilation. Obtain independent review and fix actionable findings.
-- [ ] Test migration on an isolated Neon branch, establish a recovery checkpoint, apply additive migration and verify existing data unchanged. Configure private media binding. Commit and push through existing GitHub main deployment, then verify live dashboard/auth/storage and synchronization using isolated or rollback-only checks.
+- [x] Test migration on an isolated Neon branch, establish a recovery checkpoint, apply additive migration and verify existing data unchanged. Configure private media storage. Commit and push through existing GitHub main deployment, then verify live dashboard/auth/storage and synchronization using isolated or rollback-only checks.
 
 ## Review focus
 
@@ -33,4 +33,4 @@ Ruling: the user declined R2 activation and selected Neon Object Storage. The pr
 
 Ruling: the account has reached both snapshot and branch quotas. A proposed full local data export was rejected by automatic approval review and was not performed. The release instead records non-sensitive rollback metadata (timestamp, WAL LSN, migration hash and existing-row hashes) and applies only migration 0012 through Drizzle in one database transaction. Existing owner, listing, publication, reference and account tables are locked for the brief migration check; any preservation assertion failure rolls the transaction back. Code rollback uses the previous release and leaves the additive tables intact.
 
-Deployment verification pending the final production push.
+Application commit `4dd5fdb9f8091f612018c6c6b864e47becbb440a` was pushed to `main` and released as Pages deployment `8a6e50cc-65c9-422d-894c-fc46263ea504`. Production migration preserved 1,565 owners, 107 category listings, 117 publications, 3 reference mappings and 9 accounts by whole-row hashes and counts. The live `/workflow` dashboard and intake form load for the existing Daniel session; switching to Dr Shahril and returning to Daniel works without logging out. Anonymous API access returns 401. Storage upload/download/range/private-access checks and full synchronization checks passed in isolation. No fabricated production workflow was created.
