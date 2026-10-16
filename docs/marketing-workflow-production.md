@@ -12,9 +12,11 @@ New owners have missing property details marked pending. Confirmed owner permiss
 
 ## Storage and deployment
 
-Bind a private Cloudflare R2 bucket as `WORKFLOW_MEDIA` to the existing Pages production environment. Do not enable public bucket access. Uploaded images and videos are stored under generated workflow/object IDs, validated by file signatures, limited to 30 MiB, and served only through the authenticated `/api/workflow/files/…` route. Failed database writes remove the newly uploaded orphan object. No local sample workflows or files are copied to production.
+Use the private Neon bucket `listing-workflow-media` on the production database branch. The user selected Neon storage and declined R2 activation. Set an encrypted Cloudflare Pages secret `NEON_STORAGE_CONFIG` containing `endpoint`, `region`, `bucket`, `accessKeyId` and `secretAccessKey`. Credentials have only storage read/write scopes, are never sent to the browser, and are held outside Git. The S3 client uses signed path-style requests and a fetch transport compatible with Pages Functions. Local test adapters can inject `WORKFLOW_MEDIA` without cloud credentials.
 
-Migration 0012 is additive and managed by Drizzle. Test it on a production-derived branch and establish a recovery snapshot before applying it through the direct production connection. Deploy through the existing GitHub main → Cloudflare Pages pipeline only after tests and the private storage binding are ready. Code rollback leaves the additive workflow tables and private files intact.
+Uploaded images and videos are stored under generated workflow/object IDs, validated by file signatures, limited to 30 MiB, and served only through the authenticated `/api/workflow/files/…` route. Video byte ranges are passed to Neon. Failed database writes remove the newly uploaded orphan object. No local sample workflows or files are copied to production.
+
+Migration 0012 is additive and managed by Drizzle. Test it on a production-derived branch and establish a recovery checkpoint before applying it through the direct production connection. Deploy through the existing GitHub main → Cloudflare Pages pipeline only after tests and the private storage secret are ready. Code rollback leaves the additive workflow tables and private files intact.
 
 Checks: `npm run test:workflow`, `npm run lint`, `npm run build`, Pages Functions compilation, existing owner/report regressions, and `WORKFLOW_DATABASE_PREVIEW=1 node --import tsx scripts/workflow-ui-check.ts` (set the environment variable using the current shell). The connected browser test uses disposable PGlite records and media on port 4194. The standalone local preview remains on port 4193 and keeps its independent sample data.
 

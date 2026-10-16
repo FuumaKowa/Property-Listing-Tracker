@@ -5,10 +5,12 @@ import {ownerListingsTableSql} from '../src/db/ownerListings';
 import {promotionFixture} from './owner-promotion-fixture';
 import {handleWorkflow,type WorkflowServices,type WorkflowBucket} from '../functions/api/_workflow';
 import {seedWorkflow} from '../src/workflow/seed';
+import {WorkflowSyncError} from '../src/server/workflow/sync';
 const pg=new PGlite(),files=new Map<string,{data:Uint8Array;mime:string}>();
+let uncertainPut=false;
 const db={query:async(sql:string,params?:unknown[])=>(await pg.query(sql,params)).rows as any[]};
 const hash=async(v:string)=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))).toString('hex');
-const bucket:WorkflowBucket={put:async(key,data,options)=>{files.set(key,{data,mime:options!.httpMetadata.contentType});},get:async key=>{const f=files.get(key);return f?{body:new Blob([f.data as Uint8Array<ArrayBuffer>]).stream(),size:f.data.length}:null;},delete:async key=>{files.delete(key);}};
+const bucket:WorkflowBucket={put:async(key,data,options)=>{files.set(key,{data,mime:options!.httpMetadata.contentType});if(uncertainPut)throw new WorkflowSyncError('Upload response lost.',503);},get:async key=>{const f=files.get(key);return f?{body:new Blob([f.data as Uint8Array<ArrayBuffer>]).stream(),size:f.data.length}:null;},delete:async key=>{files.delete(key);}};
 const services:WorkflowServices={connect:()=>db,transact:()=>fn=>pg.transaction(tx=>fn({query:async(sql,params)=>(await tx.query(sql,params)).rows as any[]})),authenticate:async request=>{const token=request.headers.get('Cookie')?.split('=')[1];if(!token)return null;return(await db.query('SELECT u.* FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.session_token_hash=$1 AND s.expires_at>now()',[await hash(token)]))[0]||null;}};
 const csrf=new Map<string,string>();
 async function call(path:string,method='GET',body?:any,token='daniel',headers:Record<string,string>={}){return handleWorkflow({env:{DATABASE_URL:'isolated',WORKFLOW_MEDIA:bucket},request:new Request('https://tracker.test/api/workflow/'+path,{method,headers:{Cookie:'property_tracker_session='+token,'Content-Type':'application/json','X-Workflow-CSRF':csrf.get(token)||'',...headers},body:body===undefined?undefined:JSON.stringify(body)})},services);}
@@ -35,6 +37,7 @@ try{
  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lLG+WAAAAABJRU5ErkJggg==','base64');
  const upload=async(version:number,mime='image/png',data:Uint8Array=png)=>handleWorkflow({env:{DATABASE_URL:'isolated',WORKFLOW_MEDIA:bucket},request:new Request(`https://tracker.test/api/workflow/listings/${w.id}/files?version=${version}&kind=photo&title=Exterior`,{method:'POST',headers:{Cookie:'property_tracker_session=daniel','X-Workflow-CSRF':csrf.get('daniel')!,'Content-Type':mime},body:data as Uint8Array<ArrayBuffer>})},services);
  r=await upload(w.version);assert.equal(r.status,200,await r.clone().text());w=(await r.json()).listing;assert.equal(files.size,1);
+ uncertainPut=true;assert.equal((await upload(w.version)).status,503);assert.equal(files.size,1,'An accepted upload with a lost response must be cleaned up');uncertainPut=false;
  assert.equal((await upload(w.version-1)).status,409);assert.equal(files.size,1,'Failed upload removes only the new orphan');
  assert.equal((await upload(w.version,'image/png',new TextEncoder().encode('html'))).status,400);
  const file=w.materials.find((m:any)=>m.fileKey).fileKey;

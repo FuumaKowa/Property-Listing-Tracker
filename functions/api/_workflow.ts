@@ -3,13 +3,14 @@ import {getSessionUser,type AuthEnv,type AuthUser} from './_auth';
 import {getDb} from './_db';
 import {DatabaseWorkflowStore,type WorkflowDb,type WorkflowTransaction} from '../../src/server/workflow/database';
 import {WorkflowSyncError} from '../../src/server/workflow/sync';
+import {neonWorkflowBucket} from '../../src/server/workflow/neon-storage';
 import {workflowChannels,type WorkflowUser,type WorkflowContext} from '../../src/workflow/model';
 export interface WorkflowBucket {
  put(key:string,value:Uint8Array,options?:{httpMetadata:{contentType:string}}):Promise<unknown>;
  get(key:string,options?:{range:Headers}):Promise<{body:ReadableStream;size:number;httpMetadata?:{contentType?:string};range?:{offset:number;length:number}}|null>;
  delete(key:string):Promise<unknown>;
 }
-export interface WorkflowEnv extends AuthEnv {WORKFLOW_MEDIA?:WorkflowBucket}
+export interface WorkflowEnv extends AuthEnv {NEON_STORAGE_CONFIG?:string;WORKFLOW_MEDIA?:WorkflowBucket}
 export interface WorkflowServices {authenticate:(request:Request,env:AuthEnv)=>Promise<AuthUser|null>;connect:(env:AuthEnv)=>WorkflowDb;transact:(env:AuthEnv)=>WorkflowTransaction}
 const production:WorkflowServices={authenticate:getSessionUser,connect:getDb,transact:env=>async fn=>{
  const pool=new Pool({connectionString:env.DATABASE_URL});
@@ -39,6 +40,7 @@ export async function handleWorkflow({request,env}:{request:Request;env:Workflow
  try{
   const actualAccount=await services.authenticate(request,env);if(!actualAccount)return response({error:'Sign in to open the marketing workflow.'},401);
   const db=services.connect(env),url=new URL(request.url),route=url.pathname.replace(/^\/api\/workflow\/?/,'');
+  const media=env.WORKFLOW_MEDIA||neonWorkflowBucket(env.NEON_STORAGE_CONFIG);
   const roster=await db.query("SELECT u.id,coalesce(nullif(u.display_name,''),u.username) AS name,CASE WHEN u.role='super_admin' THEN 'super_admin' ELSE coalesce(r.role,'viewer') END AS role FROM auth_users u LEFT JOIN marketing_workflow_roles r ON r.user_id=u.id ORDER BY u.id") as WorkflowUser[];
   const actual=roster.find(u=>u.id===actualAccount.id);if(!actual)return response({error:'Your account is no longer available.'},401);
   const token=request.headers.get('Cookie')?.match(/(?:^|;\s*)property_tracker_session=([^;]+)/)?.[1];if(!token)return response({error:'Sign in again to continue.'},401);
@@ -47,7 +49,7 @@ export async function handleWorkflow({request,env}:{request:Request;env:Workflow
   const saved=(await db.query('SELECT * FROM marketing_workflow_sessions WHERE session_hash=$1',[sessionHash]))[0];
   if(!saved)return response({error:'Refresh the workflow to initialize your session.'},401);
   let effective=actual.role==='super_admin'?roster.find(u=>u.id===saved.effective_user_id)||actual:actual;
-  const payload=()=>({actual,effective,csrf:saved.csrf,users:actual.role==='super_admin'?roster:[],localPreview:false,storageReady:!!env.WORKFLOW_MEDIA});
+  const payload=()=>({actual,effective,csrf:saved.csrf,users:actual.role==='super_admin'?roster:[],localPreview:false,storageReady:!!media});
   if(request.method!=='GET'){
    if(request.headers.get('Origin')&&request.headers.get('Origin')!==url.origin)return response({error:'Use the tracker from the same browser origin.'},403);
    if(request.headers.get('X-Workflow-CSRF')!==saved.csrf)return response({error:'Refresh the workflow before saving.'},403);
@@ -64,21 +66,20 @@ export async function handleWorkflow({request,env}:{request:Request;env:Workflow
   if(file&&request.method==='GET'){
    const row=(await db.query("SELECT data FROM marketing_workflows WHERE data->'materials' @> $1::jsonb LIMIT 1",[JSON.stringify([{fileKey:file[1]}])]))[0];
    const material=row?.data.materials.find((m:any)=>m.fileKey===file[1]);if(!material)return response({error:'File not found.'},404);
-   if(!env.WORKFLOW_MEDIA)return response({error:'Media storage is unavailable.'},503);
-   const object=await env.WORKFLOW_MEDIA.get(`${row.data.id}/${file[1]}`,{range:request.headers});if(!object)return response({error:'File not found.'},404);
+   if(!media)return response({error:'Media storage is unavailable.'},503);
+   const object=await media.get(`${row.data.id}/${file[1]}`,{range:request.headers});if(!object)return response({error:'File not found.'},404);
    const headers=new Headers({'Content-Type':material.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Content-Disposition':`${url.searchParams.has('download')?'attachment':'inline'}; filename="${file[1]}"`});
    if(object.range){headers.set('Content-Range',`bytes ${object.range.offset}-${object.range.offset+object.range.length-1}/${object.size}`);headers.set('Content-Length',String(object.range.length));}else headers.set('Content-Length',String(object.size));
    return new Response(object.body,{status:object.range?206:200,headers});
   }
   const upload=/^listings\/([a-f0-9-]{36})\/files$/.exec(route);
   if(upload&&request.method==='POST'){
-   if(!env.WORKFLOW_MEDIA)return response({error:'Media storage is unavailable. Your other details are saved.'},503);
+   if(!media)return response({error:'Media storage is unavailable. Your other details are saved.'},503);
    const data=await body(request,30*1024*1024),mime=request.headers.get('Content-Type')?.split(';')[0]||'',extension=fileExtension(data,mime),kind=url.searchParams.get('kind') as 'photo'|'poster'|'video';
    if(!['photo','poster','video'].includes(kind)||(kind==='video')!==mime.startsWith('video/'))return response({error:'Choose the matching material type.'},400);
    const key=crypto.randomUUID()+'.'+extension,objectKey=`${upload[1]}/${key}`;
-   await env.WORKFLOW_MEDIA.put(objectKey,data,{httpMetadata:{contentType:mime}});
-   try{return response({listing:await store.action(upload[1],Number(url.searchParams.get('version')),{type:'addMaterial',kind,title:url.searchParams.get('title')||'Uploaded material',fileKey:key,mime,original:url.searchParams.get('original')==='true',replacesId:url.searchParams.get('replacesId')||undefined},context)});}
-   catch(error){await env.WORKFLOW_MEDIA.delete(objectKey).catch(()=>{});throw error;}
+   try{await media.put(objectKey,data,{httpMetadata:{contentType:mime}});return response({listing:await store.action(upload[1],Number(url.searchParams.get('version')),{type:'addMaterial',kind,title:url.searchParams.get('title')||'Uploaded material',fileKey:key,mime,original:url.searchParams.get('original')==='true',replacesId:url.searchParams.get('replacesId')||undefined},context)});}
+   catch(error){await media.delete(objectKey).catch(()=>{});throw error;}
   }
   if(request.method!=='POST')return response({error:'Workflow route not found.'},404);
   let input:any;try{input=JSON.parse(new TextDecoder().decode(await body(request,256000)));}catch(error){if(error instanceof WorkflowSyncError)throw error;return response({error:'Invalid workflow request.'},400);}

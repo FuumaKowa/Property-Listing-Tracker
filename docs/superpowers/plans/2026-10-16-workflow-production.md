@@ -4,7 +4,7 @@
 
 **Goal:** Run the reviewed marketing dashboard with real users, private media storage and transactional updates to existing owner/category listings without duplicates.
 
-**Architecture:** Keep the pure workflow transitions and React interface. Add a production Pages handler using existing login sessions, a Neon-backed workflow store and private Cloudflare R2 media. Record links by stable owner/listing IDs and unique workflow reference. Apply workflow state, changed listing fields, publication links and audit records in one database transaction.
+**Architecture:** Keep the pure workflow transitions and React interface. Add a production Pages handler using existing login sessions, a Neon-backed workflow store and private Neon Object Storage. Record links by stable owner/listing IDs and unique workflow reference. Apply workflow state, changed listing fields, publication links and audit records in one database transaction.
 
 **Constraints:** Existing sheet structure, manual notes, prices, renewal dates, assignments and publication history survive. Do not copy local sample records to production. Only the actual SuperAdmin can switch workflow users. Workflow state never changes listing availability merely because material approval is pending. Blank inputs do not erase known listing details. Reference or category conflicts stop with a reviewable error. Explicit manual matching handles ambiguous candidates.
 
@@ -29,4 +29,8 @@
 
 Implementation and independent review completed. Workflow regressions, owner/report regressions, TypeScript, production build, Pages Functions compilation and connected desktop/mobile handoffs pass. The new information panels and conflict navigation have browser coverage. Both review matching findings have regression cases. Real Neon WebSocket transactions and concurrent create requests pass on isolated branch `br-floral-union-b3uj2h1p`; migration preserved existing rows by whole-row hashes.
 
-Production rollout awaits Cloudflare sign-in to provision/bind the private `WORKFLOW_MEDIA` bucket. The browser and CLI have no authenticated Cloudflare session. User sign-in was requested. No production migration or main-branch deployment has been performed. After sign-in: inspect the existing Pages project, configure private media, establish a Neon production recovery checkpoint, apply migration 0012 with before/after preservation checks, push through the existing main deployment, and verify live auth/storage.
+Ruling: the user declined R2 activation and selected Neon Object Storage. The private `listing-workflow-media` bucket exists on production and the isolated test branch. An encrypted `NEON_STORAGE_CONFIG` secret is configured in Pages production; no R2 subscription was activated. Signed upload/download, byte ranges and denied anonymous reads passed against the actual Neon test bucket. The adapter uses fetch with a real abort timeout. An accepted PUT with a lost response is included in orphan cleanup and has a regression test.
+
+Ruling: the account has reached both snapshot and branch quotas. A proposed full local data export was rejected by automatic approval review and was not performed. The release instead records non-sensitive rollback metadata (timestamp, WAL LSN, migration hash and existing-row hashes) and applies only migration 0012 through Drizzle in one database transaction. Existing owner, listing, publication, reference and account tables are locked for the brief migration check; any preservation assertion failure rolls the transaction back. Code rollback uses the previous release and leaves the additive tables intact.
+
+Deployment verification pending the final production push.
