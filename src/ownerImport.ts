@@ -55,7 +55,7 @@ export function normalizeOwnerImport(value: unknown): OwnerImportInput {
     : "Unlisted";
   const stage = OWNER_SEEDING_STAGES.find((value) => value.toUpperCase() === input.seedingStatus.toUpperCase());
   if (input.seedingStatus && !stage)
-    throw new Error("Seeding stage must be IFU1, IFU2, IFU3 or Contacted.");
+    throw new Error("Seeding stage must be IFU1, IFU2, IFU3, Contacted or Invalid link.");
   return {
     ...validateOwnerListing({
       ...input,
@@ -68,3 +68,4 @@ export function normalizeOwnerImport(value: unknown): OwnerImportInput {
     seedingStatus: (stage as OwnerImportInput["seedingStatus"]) || null,
   };
 }
+

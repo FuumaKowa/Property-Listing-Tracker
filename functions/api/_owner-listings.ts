@@ -173,7 +173,7 @@ export async function handleOwnerListings(
     } else if (action === "activity" && method === "PATCH") {
       if (body.seedingStatus !== undefined) {
         if (body.seedingStatus !== null && !OWNER_SEEDING_STAGES.includes(body.seedingStatus))
-          return fail("Select IFU1, IFU2, IFU3 or Contacted.");
+          return fail("Select IFU1, IFU2, IFU3, Contacted or Invalid link.");
         sets.push("seeding_status=" + param(body.seedingStatus));
       }
       if (body.status !== undefined) {
@@ -295,3 +295,4 @@ export async function handleOwnerListings(
     );
   }
 }
+

@@ -13,6 +13,7 @@ assert(
 );
 const { handleOwnerListings } =
   await import("../functions/api/_owner-listings");
+const { OWNER_SEEDING_STAGES } = await import("../src/ownerListing");
 const { ownerListingsTableSql } = await import("../src/db/ownerListings");
 const pg = new PGlite();
 await pg.exec("SET TIME ZONE 'UTC'");
@@ -40,6 +41,10 @@ await pg.exec(readFileSync("drizzle/0006_owner_selangor_coverage.sql", "utf8"));
 const beforeContactedMigration = (await pg.query("SELECT * FROM owner_listings ORDER BY id")).rows;
 await pg.exec(readFileSync("drizzle/0007_owner_contacted_stage.sql", "utf8"));
 assert.deepEqual((await pg.query("SELECT * FROM owner_listings ORDER BY id")).rows, beforeContactedMigration, "Contacted migration preserves existing owner rows");
+const beforeInvalidLinkMigration = (await pg.query("SELECT * FROM owner_listings ORDER BY id")).rows;
+await pg.exec(readFileSync("drizzle/0013_owner_invalid_link_stage.sql", "utf8"));
+assert.deepEqual((await pg.query("SELECT * FROM owner_listings ORDER BY id")).rows, beforeInvalidLinkMigration, "Invalid link migration preserves existing owner rows");
+assert(OWNER_SEEDING_STAGES.includes("Invalid link"), "Invalid link is an owner seeding stage");
 let user: any = {
   id: 1,
   username: "admin",
@@ -107,6 +112,7 @@ try {
     propertyName: "Synthetic property",
     propertyType: "highrise",
     propertyPrice: "300000",
+    propertyLink: "https://example.com/original-post",
     status: "Unlisted",
   };
   for (const [location, id] of [
@@ -351,6 +357,12 @@ try {
     const reloaded = (await (await call("GET")).json()).data.find((v:any)=>v.id===row.id);
     assert.equal(reloaded.seedingStatus,"Contacted","Contacted persists through Express and Pages adapters");
     assert.equal((await pg.query<any>("SELECT seeding_status FROM owner_listings WHERE id=$1",[row.id])).rows[0].seeding_status,"Contacted");
+    const invalidLink = await fetch(`${base}/owner-listings/${row.id}/activity`, {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:reloaded.version,seedingStatus:"Invalid link",note:"Original post link is broken"})});
+    assert.equal(invalidLink.status,200,await invalidLink.clone().text());
+    const invalidLinkRow = (await invalidLink.json()).data;
+    assert.equal(invalidLinkRow.seedingStatus,"Invalid link");
+    assert.equal(invalidLinkRow.propertyLink,"https://example.com/original-post","Marking a broken link as a stage must retain the original URL");
+    assert.equal((await pg.query<any>("SELECT seeding_status,property_link FROM owner_listings WHERE id=$1",[row.id])).rows[0].seeding_status,"Invalid link");
     const contactedHistory = (await (await call("GET",undefined,row.id,"history")).json()).data;
     assert(contactedHistory.some((event:any)=>event.seedingStatus==="Contacted"&&event.note==="Owner contacted"));
     user = null;
@@ -453,3 +465,4 @@ try {
 } finally {
   await pg.close();
 }
+
