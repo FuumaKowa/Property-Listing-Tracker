@@ -34,7 +34,8 @@
     "test:owner-summary": "tsx scripts/owner-summary-report-check.ts && tsx scripts/owner-summary-api-check.ts",
     "test:owner-colors": "tsx scripts/owner-colors-check.ts",
     "test:listing-reports": "tsx scripts/listing-report-location-check.ts && tsx scripts/listing-location-audit-check.ts && tsx scripts/listing-report-create-check.ts",
-    "audit:listing-locations": "tsx scripts/audit-listing-locations.ts"
+    "audit:listing-locations": "tsx scripts/audit-listing-locations.ts",
+    "test:iclick": "tsx scripts/iclick-api-check.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
