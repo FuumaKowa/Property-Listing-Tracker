@@ -1,7 +1,7 @@
 export const OWNER_SHEET = 'Master Listing Owner' as const;
 export const OWNER_PROPERTY_TYPES = ['landed', 'highrise', 'land', 'commercial', 'pending'] as const;
 export const OWNER_STATUSES = ['Listed', 'Unlisted', 'Rejected'] as const;
-export const OWNER_SEEDING_STAGES = ['IFU1', 'IFU2', 'IFU3', 'Contacted'] as const;
+export const OWNER_SEEDING_STAGES = ['IFU1', 'IFU2', 'IFU3', 'Contacted', 'Invalid link'] as const;
 
 export interface OwnerListingInput {
   transactionType?: 'rent' | 'sale' | null;
@@ -65,3 +65,4 @@ export function validateOwnerListing(value: unknown): OwnerListingInput {
   if(input.location!==undefined&&(typeof input.location!=='string'||input.location.length>300))throw new Error('Location must be at most 300 characters.');
   return { transactionType: input.transactionType as OwnerListingInput['transactionType'], location:typeof input.location==='string'?input.location.trim():undefined,version:typeof input.version==='number'?input.version:undefined,ownerName, noTel, propertyName, propertyLink, propertyPrice, propertyType: input.propertyType as OwnerListingInput['propertyType'], status: input.status as OwnerListingInput['status'] };
 }
+
