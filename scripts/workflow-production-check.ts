@@ -30,6 +30,8 @@ try{
  const brief={...seedWorkflow()[0].brief,reference:'WTS-202610-PRODUCTION-TEST',property:'Synthetic API property',sourceUrl:'',phone:'0190000001',permission:true,tasks:[]};
  let r=await call('listings','POST',{brief});assert.equal(r.status,201,await r.clone().text());let w=(await r.json()).listing;
  assert.deepEqual(w.assignees,{coordinator:10,producer:3,reviewer:5,publisher:2});
+ assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,productionWorker:true,action:{type:'productionWorker',operation:'claim',runId:'forged'}})).status,403);
+ assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:{type:'startProduction',provider:'template'}})).status,503);
  const action=async(a:any)=>{const r=await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:a});assert.equal(r.status,200,await r.clone().text());w=(await r.json()).listing;};
  await action({type:'handoff'});await switchTo(3);
  assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:{type:'addMaterial',kind:'photo',title:'Forged',fileKey:'not-owned.png'}})).status,400);
@@ -43,13 +45,13 @@ try{
  const file=w.materials.find((m:any)=>m.fileKey).fileKey;
  assert.equal((await call('files/'+file)).status,200);assert.equal((await call('files/'+file,'GET',undefined,'missing')).status,401);
  await action({type:'submit',ids:w.materials.map((m:any)=>m.id)});
- await switchTo(2);assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:{type:'approveForPublishing',channelIds:['facebook-page'],materialIds:w.materials.map((m:any)=>m.id)}})).status,400);
- await switchTo(5);await action({type:'approveForPublishing',channelIds:['facebook-page','tiktok','whatsapp-nhc'],materialIds:w.materials.map((m:any)=>m.id)});
+ await switchTo(5);assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:{type:'approveForPublishing',channelIds:['facebook-page'],materialIds:w.materials.map((m:any)=>m.id)}})).status,400,'Dr Shahril no longer performs the publishing handoff');
+ await switchTo(2);await action({type:'approveForPublishing',channelIds:['facebook-page','tiktok','whatsapp-nhc'],materialIds:w.materials.map((m:any)=>m.id)});
  await switchTo(2);await action({type:'publish',channelId:'facebook-page',url:'https://example.com/published',note:'Published'});await action({type:'publish',channelId:'whatsapp-nhc',url:'',note:'Broadcast done'});
  assert.equal((await db.query('SELECT count(*)::int AS n FROM listing_publications WHERE listing_id=$1',[w.links.listingId]))[0].n,1);
  assert.ok((await db.query('SELECT notes FROM listings WHERE id=$1',[w.links.listingId]))[0].notes.includes('Broadcast HotListing Locality: Done'));
  await db.query("UPDATE owner_listings SET status='Unlisted' WHERE id=$1",[w.links.ownerId]);
- await switchTo(5);assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:{type:'approveForPublishing',channelIds:['facebook-page','tiktok','whatsapp-nhc','mudah'],materialIds:w.materials.map((m:any)=>m.id)}})).status,409);
+ await switchTo(2);assert.equal((await call(`listings/${w.id}/actions`,'POST',{version:w.version,action:{type:'approveForPublishing',channelIds:['facebook-page','tiktok','whatsapp-nhc','mudah'],materialIds:w.materials.map((m:any)=>m.id)}})).status,409);
  await db.query("UPDATE auth_users SET role='user' WHERE id=1");assert.equal((await session()).effective.id,1,'Revoked SuperAdmin cannot keep impersonating');assert.equal((await call('switch','POST',{userId:10})).status,403);
  await db.query('DELETE FROM auth_sessions WHERE session_token_hash=$1',[await hash('daniel')]);assert.equal((await call('listings')).status,401,'Logout invalidates workflow access');
  console.log('PASS production workflow auth, scoped switching, real account assignments, CSRF, private uploads, orphan cleanup, linked publications and revocation');

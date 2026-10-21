@@ -98,13 +98,14 @@ export async function syncWorkflow(db:WorkflowDb,w:WorkflowListing,previous:Work
  }
  if(!listing){listing=(await db.query('SELECT * FROM listings WHERE source_owner_listing_id=$1',[owner.id]))[0];if(listing&&listing.project_category!==category)throw new WorkflowSyncError('The linked owner already belongs to a different category listing.');}
  if(!listing&&b.permission){
-  listing=(await db.query("INSERT INTO listings(source_owner_listing_id,property,project_category,location,tenure,pm,agent,no_tel,available_units,status,date,renew_status,notes,created_by_user_id,created_by_name,updated_by_user_id,updated_by_name) VALUES($1,$2,$3,$4,$5,'-',$6,$7,'-','Pending','','Not Renewed','',$8,$9,$8,$9) RETURNING *",[owner.id,b.property,category,b.location||owner.location||'Pending details',owner.tenure||'-',b.ownerName||owner.owner_name,b.phone||owner.no_tel,String(context.effective.id),context.effective.name]))[0];
+  listing=(await db.query("INSERT INTO listings(source_owner_listing_id,property,project_category,location,tenure,pm,agent,no_tel,available_units,asking_price,status,date,renew_status,notes,created_by_user_id,created_by_name,updated_by_user_id,updated_by_name) VALUES($1,$2,$3,$4,$5,'-',$6,$7,'-',$10::numeric,'Pending','','Not Renewed','',$8,$9,$8,$9) RETURNING *",[owner.id,b.property,category,b.location||owner.location||'Pending details',owner.tenure||'-',b.ownerName||owner.owner_name,b.phone||owner.no_tel,String(context.effective.id),context.effective.name,price]))[0];
   await audit(db,'listings',null,listing,context);
  }
  w.links={ownerId:owner.id,listingId:listing?.id||null,category,syncedAt:new Date().toISOString()};
  if(listing){
   const values:Record<string,unknown>={source_owner_listing_id:owner.id};
   for(const [key,column] of [['property','property'],['ownerName','agent'],['phone','no_tel'],['location','location']] as const)if(changed(key)&&known(b[key]))values[column]=b[key];
+  if(changed('price')&&price!==null)values.asking_price=price.toFixed(2);
   if(permissionChanged&&b.permission){values.archived_at=null;values.archived_by_name=null;}
   if(previous&&permissionChanged&&!b.permission&&!listing.archived_at){values.archived_at=new Date().toISOString();values.archived_by_name=context.effective.name;}
   values.notes=withInformation(listing.notes,w);

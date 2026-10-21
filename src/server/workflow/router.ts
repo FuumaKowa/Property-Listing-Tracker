@@ -5,7 +5,7 @@ import {previewUsers} from '../../workflow/seed';
 import {workflowChannels,type WorkflowUser,type WorkflowContext,type MaterialKind} from '../../workflow/model';
 
 interface Session {actual:WorkflowUser;effective:WorkflowUser;csrf:string;expires:number}
-export function createWorkflowRouter(store:LocalWorkflowStore,authenticate:(req:Request)=>Promise<WorkflowUser|null>){
+export function createWorkflowRouter(store:LocalWorkflowStore,authenticate:(req:Request)=>Promise<WorkflowUser|null>,production={enabled:false,openaiReady:false}){
   const router=express.Router(),sessions=new Map<string,Session>();
   router.use(express.json({limit:'1mb'}));
   router.use((req,res,next)=>{
@@ -16,7 +16,7 @@ export function createWorkflowRouter(store:LocalWorkflowStore,authenticate:(req:
     next();
   });
   const token=(req:Request)=>(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('workflow_preview='))?.slice('workflow_preview='.length)||'';
-  const payload=(s:Session)=>({actual:s.actual,effective:s.effective,csrf:s.csrf,users:s.actual.role==='super_admin'?previewUsers:[],localPreview:true});
+  const payload=(s:Session)=>({actual:s.actual,effective:s.effective,csrf:s.csrf,users:s.actual.role==='super_admin'?previewUsers:[],localPreview:true,production});
   const safe=(fn:(req:Request,res:Response)=>Promise<unknown>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req,res).catch(next);};
   router.get('/session',safe(async(req,res)=>{
     const now=Date.now();for(const [id,s] of sessions)if(s.expires<now)sessions.delete(id);
@@ -43,6 +43,8 @@ export function createWorkflowRouter(store:LocalWorkflowStore,authenticate:(req:
   router.post('/listings',safe(async(req,res)=>res.status(201).json({listing:await store.create(req.body?.brief,context(res))})));
   router.post('/listings/:id/actions',safe(async(req,res)=>{
     const action=req.body?.action;
+    if(action?.type==='productionWorker')return res.status(403).json({error:'Only the production worker can update job results.'});
+    if(action?.type==='startProduction'&&(!production.enabled||(action.provider==='openai'&&!production.openaiReady)))return res.status(503).json({error:!production.enabled?'Automatic production worker is not connected.':'Connect an OpenAI API key or choose Templates.'});
     if(action?.type==='addMaterial'&&(action.kind!=='copy'||action.fileKey||action.mime))throw new Error('Use the file upload control for photos, posters and videos.');
     return res.json({listing:await store.action(req.params.id,req.body?.version,action,context(res))});
   }));

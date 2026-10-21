@@ -5,6 +5,7 @@ export type WorkflowTransaction=<T>(fn:(db:WorkflowDb)=>Promise<T>)=>Promise<T>;
 export class DatabaseWorkflowStore {
  constructor(private db:WorkflowDb,private transact:WorkflowTransaction,private users:WorkflowUser[]){}
  async list(){return (await this.db.query('SELECT data FROM marketing_workflows ORDER BY updated_at DESC')).map(r=>r.data as WorkflowListing);}
+ async pendingProduction(){return (await this.db.query("SELECT data FROM marketing_workflows WHERE data->'production'->>'status' IN ('queued','running') ORDER BY updated_at ASC LIMIT 100")).map(r=>r.data as WorkflowListing);}
  async get(id:string){const row=(await this.db.query('SELECT data FROM marketing_workflows WHERE id=$1',[id]))[0];if(!row)throw new WorkflowSyncError('Workflow not found.',404);return row.data as WorkflowListing;}
  private async lock(db:WorkflowDb){
   await db.query("SET LOCAL lock_timeout='8s'");
@@ -31,10 +32,13 @@ export class DatabaseWorkflowStore {
   if(!record)throw new WorkflowSyncError('Workflow not found.',404);
   if(!Number.isSafeInteger(version)||record.version!==version)throw new WorkflowSyncError('This workflow changed. Refresh before saving.',409);
   const previous=record.data as WorkflowListing;
+  // Job metadata remains recoverable even if a linked listing was deleted externally.
+  const metadataOnly=action?.type==='productionWorker'&&action.operation!=='complete';
+  if(metadataOnly){const next=applyWorkflowAction(previous,action,context);await db.query('UPDATE marketing_workflows SET version=$2,data=$3::jsonb,updated_at=now() WHERE id=$1',[id,next.version,JSON.stringify(next)]);return next;}
   if(!record.owner_listing_id||previous.links?.listingId&&!record.listing_id)throw new WorkflowSyncError('A linked listing was deleted. Restore it or resolve the record link before continuing.',409);
   const next=applyWorkflowAction(previous,action,context);
   if(next.brief.reference!==previous.brief.reference)throw new WorkflowSyncError('The reference is linked to your listing records and cannot be changed here.',409);
-  if(['publish','approveDestination','approveForPublishing'].includes(action.type)){
+  if(['publish','approveDestination','approveForPublishing','startProduction'].includes(action.type)||(action.type==='productionWorker'&&action.operation==='complete')){
    const rows=await db.query('SELECT o.status,l.archived_at FROM owner_listings o LEFT JOIN listings l ON l.id=$2 WHERE o.id=$1',[record.owner_listing_id,record.listing_id]);
    if(rows[0]?.status!=='Listed'||rows[0]?.archived_at)throw new WorkflowSyncError('The linked listing is unlisted or archived. Confirm owner permission and restore it before publishing.',409);
   }
