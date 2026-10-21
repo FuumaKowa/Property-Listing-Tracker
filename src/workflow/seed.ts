@@ -13,8 +13,6 @@ export function seedWorkflow(){
   second=applyWorkflowAction(second,{type:'addMaterial',kind:'copy',title:'Rental caption',text:'FOR RENT | Sample Jelutong Suites\nBukit Jelutong, Shah Alam • RM2,850\nFictional listing for testing the approval workflow.'},context);
   const ids=second.materials.map(m=>m.id);
   second=applyWorkflowAction(second,{type:'submit',ids},context);
-  second=applyWorkflowAction(second,{type:'review',ids,approved:true},context);
-  for(const channelId of ['facebook-page','telegram-subsale','tiktok'])second=applyWorkflowAction(second,{type:'addDestination',channelId},context);
-  second=applyWorkflowAction(second,{type:'approveDestination',channelId:'facebook-page',materialIds:ids},context);
+  second=applyWorkflowAction(second,{type:'approveForPublishing',channelIds:['facebook-page','telegram-subsale','tiktok'],materialIds:ids},context);
   return [first,second];
 }

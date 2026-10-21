@@ -10,7 +10,7 @@ export interface WorkflowBucket {
  get(key:string,options?:{range:Headers}):Promise<{body:ReadableStream;size:number;httpMetadata?:{contentType?:string};range?:{offset:number;length:number}}|null>;
  delete(key:string):Promise<unknown>;
 }
-export interface WorkflowEnv extends AuthEnv {NEON_STORAGE_CONFIG?:string;WORKFLOW_MEDIA?:WorkflowBucket}
+export interface WorkflowEnv extends AuthEnv {NEON_STORAGE_CONFIG?:string;WORKFLOW_MEDIA?:WorkflowBucket;WORKFLOW_PRODUCTION_ENABLED?:string;WORKFLOW_OPENAI_READY?:string}
 export interface WorkflowServices {authenticate:(request:Request,env:AuthEnv)=>Promise<AuthUser|null>;connect:(env:AuthEnv)=>WorkflowDb;transact:(env:AuthEnv)=>WorkflowTransaction}
 const production:WorkflowServices={authenticate:getSessionUser,connect:getDb,transact:env=>async fn=>{
  const pool=new Pool({connectionString:env.DATABASE_URL});
@@ -49,7 +49,7 @@ export async function handleWorkflow({request,env}:{request:Request;env:Workflow
   const saved=(await db.query('SELECT * FROM marketing_workflow_sessions WHERE session_hash=$1',[sessionHash]))[0];
   if(!saved)return response({error:'Refresh the workflow to initialize your session.'},401);
   let effective=actual.role==='super_admin'?roster.find(u=>u.id===saved.effective_user_id)||actual:actual;
-  const payload=()=>({actual,effective,csrf:saved.csrf,users:actual.role==='super_admin'?roster:[],localPreview:false,storageReady:!!media});
+  const payload=()=>({actual,effective,csrf:saved.csrf,users:actual.role==='super_admin'?roster:[],localPreview:false,storageReady:!!media,production:{enabled:env.WORKFLOW_PRODUCTION_ENABLED==='true',openaiReady:env.WORKFLOW_OPENAI_READY==='true'}});
   if(request.method!=='GET'){
    if(request.headers.get('Origin')&&request.headers.get('Origin')!==url.origin)return response({error:'Use the tracker from the same browser origin.'},403);
    if(request.headers.get('X-Workflow-CSRF')!==saved.csrf)return response({error:'Refresh the workflow before saving.'},403);
@@ -92,6 +92,8 @@ export async function handleWorkflow({request,env}:{request:Request;env:Workflow
   if(route==='listings')return response({listing:await store.create(input?.brief,context,input?.links||{})},201);
   const mutation=/^listings\/([a-f0-9-]{36})\/actions$/.exec(route);
   if(mutation){
+   if(input?.action?.type==='productionWorker')return response({error:'Only the production worker can update job results.'},403);
+   if(input?.action?.type==='startProduction'&&(env.WORKFLOW_PRODUCTION_ENABLED!=='true'||(input.action.provider==='openai'&&env.WORKFLOW_OPENAI_READY!=='true')))return response({error:env.WORKFLOW_PRODUCTION_ENABLED!=='true'?'Automatic production worker is not connected.':'Connect an OpenAI API key or choose Templates.'},503);
    const action=input?.action;if(action?.type==='addMaterial'&&(action.kind!=='copy'||action.fileKey||action.mime))return response({error:'Use file upload for photos, posters and video.'},400);
    return response({listing:await store.action(mutation[1],input?.version,action,context)});
   }
