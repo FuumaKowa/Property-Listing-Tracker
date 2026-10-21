@@ -24,7 +24,7 @@ import { OwnerForm } from "./OwnerListingForm";
 import { OwnerImportModal } from "./OwnerImportModal";
 import { OwnerSummaryReportImport } from "./OwnerSummaryReportImport";
 import { browseOwners, defaultOwnerFilters, type OwnerFilters } from "../utils/ownerBrowsing";
-import { Clock3 } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock3, SlidersHorizontal } from "lucide-react";
 import { ownerRowTone, OWNER_ROW_TONES } from "../utils/ownerRowColors";
 function OwnerOverdueBadge(){return <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-900" title="No agent activity for 3 days"><Clock3 className="h-3.5 w-3.5" aria-hidden="true"/>Overdue</span>;}
 const button = "ui-button";
@@ -43,6 +43,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(50);
   const scrollArea = useRef<HTMLDivElement>(null);
   const [showFilters,setShowFilters] = useState(false);
+  const [filtersOpen,setFiltersOpen] = useState(true);
   const {query,status,type,agent,alertOnly} = filters;
   const updateFilter = <K extends keyof OwnerFilters>(key:K,value:OwnerFilters[K]) => setFilters(previous=>({...previous,[key]:value}));
   const setQuery=(value:string)=>updateFilter('query',value),setStatus=(value:string)=>updateFilter('status',value),setType=(value:string)=>updateFilter('type',value),setAgent=(value:string)=>updateFilter('agent',value);
@@ -87,6 +88,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
   const myCount=rows.filter(row=>row.assignedAgentId===user?.id).length;
   const overdueCount=rows.filter(row=>ownerOverdue(row,now)).length;
   const unassignedCount=rows.filter(row=>row.assignedAgentId==null).length;
+  const activeFilterCount=[query.trim()!=='',status!=='All',type!=='All',agent!=='All',alertOnly,filters.location.trim()!=='',filters.stage!=='All',filters.minPrice.trim()!=='',filters.maxPrice.trim()!=='',filters.dateFrom.trim()!=='',filters.dateTo.trim()!=='',filters.sort!=='newest'].filter(Boolean).length;
   const locations=Array.from(new Set(settings.rules.flatMap(rule=>rule.areas))).sort();
   const changePage=(next:number)=>{setPage(next);if(scrollArea.current)scrollArea.current.scrollTop=0;if(window.innerWidth<768)window.scrollTo({top:0,behavior:"auto"});};
   const detail = rows.find((r) => r.id === detailId);
@@ -129,6 +131,10 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
             </button>
           </div>
         </div>
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" aria-label={filtersOpen ? 'Hide owner search and filters' : 'Show owner search and filters'} aria-expanded={filtersOpen} aria-controls="owner-search-filters" className={button+" inline-flex items-center gap-2"} onClick={()=>setFiltersOpen(open=>!open)}><SlidersHorizontal size={15}/> Search &amp; filters{activeFilterCount>0&&<span className="rounded-full bg-indigo-100 px-1.5 text-indigo-800">{activeFilterCount} active</span>}{filtersOpen?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>
+        </div>
+        {filtersOpen&&<div id="owner-search-filters" className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
             className={button + " text-amber-800"}
@@ -216,6 +222,7 @@ export function OwnerListingSheet({onListingsChanged}:{onListingsChanged?:()=>vo
           <label className="text-xs text-slate-600">Sort<select className={button+' mt-1 block'} aria-label="Sort owner listings" value={filters.sort} onChange={event=>updateFilter('sort',event.target.value)}><option value="newest">Newest added</option><option value="oldest">Oldest added</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="inactivity">Longest inactivity</option></select></label>
         </div>}
         {results.errors.length>0 && <p role="alert" className="text-sm text-rose-700">{results.errors.join(' ')}</p>}
+        </div>}
         <p role="status" className="text-sm font-semibold text-slate-700">{results.total} matching listings{agent==='All'?'':agent==='unassigned'?' · Unassigned':' · '+(settings.agents.find(value=>String(value.id)===agent)?.name || 'Selected agent')}</p>
         <div aria-label="Owner row colour legend" className="flex flex-wrap items-center gap-1.5 text-xs text-slate-700">
           <span className="mr-1 font-medium">Row colours:</span>
