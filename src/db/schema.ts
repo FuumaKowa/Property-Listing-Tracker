@@ -50,6 +50,7 @@ export const listings = pgTable('listings', {
   agent: text('agent'),
   noTel: text('no_tel'),
   availableUnits: text('available_units').notNull().default('-'),
+  askingPrice: numeric('asking_price', { precision: 18, scale: 2 }),
   status: text('status').notNull().default('Active'),
   date: text('date').notNull().default(''),
   propertyGuruRepostDate: date('property_guru_repost_date', { mode: 'string' }),
@@ -98,8 +99,27 @@ export const listingAuditLogs = pgTable('listing_audit_logs', {
   timestamp: timestamp('timestamp').defaultNow(),
 });
 
+export const iclickListingImages = pgTable('iclick_listing_images', {
+  id: serial('id').primaryKey(),
+  listingId: integer('listing_id').references(() => listings.id, { onDelete: 'cascade' }).notNull(),
+  fileKey: text('file_key').notNull().unique(),
+  objectKey: text('object_key').notNull().unique(),
+  title: text('title').notNull(),
+  contentType: text('content_type').notNull(),
+  byteSize: integer('byte_size').notNull(),
+  createdByName: text('created_by_name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('iclick_listing_images_listing_idx').on(table.listingId),
+  check('iclick_listing_images_file_key_check', sql`${table.fileKey} ~ '^[a-f0-9-]{36}\\.(jpg|png|webp)$'`),
+  check('iclick_listing_images_content_type_check', sql`${table.contentType} IN ('image/jpeg','image/png','image/webp')`),
+  check('iclick_listing_images_byte_size_check', sql`${table.byteSize} BETWEEN 1 AND 15728640`),
+  check('iclick_listing_images_title_check', sql`length(trim(${table.title})) BETWEEN 1 AND 160`),
+]);
+
 export const listingsRelations = relations(listings, ({ many }) => ({
   auditLogs: many(listingAuditLogs),
+  iclickImages: many(iclickListingImages),
 }));
 
 export const listingAuditLogsRelations = relations(listingAuditLogs, ({ one }) => ({
@@ -107,6 +127,10 @@ export const listingAuditLogsRelations = relations(listingAuditLogs, ({ one }) =
     fields: [listingAuditLogs.listingId],
     references: [listings.id],
   }),
+}));
+
+export const iclickListingImagesRelations = relations(iclickListingImages, ({ one }) => ({
+  listing: one(listings, { fields: [iclickListingImages.listingId], references: [listings.id] }),
 }));
 
 // Owner records have no expiry or renewal lifecycle.
@@ -180,4 +204,3 @@ export const marketingWorkflowSessions=pgTable('marketing_workflow_sessions',{
 export const marketingWorkflowSwitches=pgTable('marketing_workflow_switches',{
  id:serial('id').primaryKey(),actualUserId:integer('actual_user_id').references(()=>authUsers.id,{onDelete:'set null'}),actualName:text('actual_name').notNull(),fromName:text('from_name').notNull(),toName:text('to_name').notNull(),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
 });
-

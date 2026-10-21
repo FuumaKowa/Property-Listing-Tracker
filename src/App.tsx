@@ -27,11 +27,15 @@ import {
 } from './services/api';
 
 const WorkflowApp=lazy(()=>import('./components/workflow/WorkflowApp'));
+const IclickWorkspace=lazy(()=>import('./components/IclickWorkspace').then(module=>({default:module.IclickWorkspace})));
 export default function App() {
   return <AuthenticatedApp/>;
 }
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
+  if ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV && new URLSearchParams(window.location.search).get('preview') === 'iclick') {
+    return <Suspense fallback={<div className="p-8 text-sm text-slate-600">Opening local IClick preview…</div>}><IclickWorkspace preview/></Suspense>;
+  }
   if (loading) {
     return <div className="flex h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading sign in...</div>;
   }
@@ -45,7 +49,7 @@ function Workspace() {
   const [listings, setListings] = useState<PropertyListing[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All' | typeof OWNER_SHEET>(()=>new URLSearchParams(window.location.search).has('ownerId')?OWNER_SHEET:new URLSearchParams(window.location.search).has('listingId')?'All':'Project Marketing (PM)');
+  const [activeSheet, setActiveSheet] = useState<ProjectCategory | 'All' | 'IClick' | typeof OWNER_SHEET>(()=>new URLSearchParams(window.location.search).has('ownerId')?OWNER_SHEET:new URLSearchParams(window.location.search).has('listingId')?'All':'Project Marketing (PM)');
   const sheetNavigation = useRef<HTMLElement>(null);
   useEffect(() => {
     sheetNavigation.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -137,11 +141,12 @@ function Workspace() {
   };
 
   const sheetListings = useMemo(() => {
+    if (activeSheet === 'IClick') return [];
     if (activeSheet === 'All') return listings;
     return listings.filter((listing) => (listing.projectCategory || 'Project Marketing (PM)') === activeSheet);
   }, [activeSheet, listings]);
 
-  const handleSheetChange = (sheet: ProjectCategory | 'All' | typeof OWNER_SHEET) => {
+  const handleSheetChange = (sheet: ProjectCategory | 'All' | 'IClick' | typeof OWNER_SHEET) => {
     setActiveSheet(sheet);
     setFilters((prev) => ({ ...prev, projectCategory: 'All', category: 'All' }));
     setActiveFilterTab('all');
@@ -209,7 +214,7 @@ function Workspace() {
   return (
     <div className="flex min-h-[100dvh] w-full min-w-0 flex-col md:h-[100dvh] md:overflow-hidden bg-slate-100 font-sans text-slate-900">
       {/* 1. Header Toolbar */}
-      <Header
+      {activeSheet!=='IClick'&&<Header
         ownerMode={activeSheet === OWNER_SHEET}
         onOpenPublicationChannels={() => setShowChannels(true)}
         onOpenArchive={()=>setShowArchive(true)}
@@ -228,7 +233,7 @@ function Workspace() {
         isRefreshing={isRefreshing}
         onOpenUserManagement={() => setIsUserManagementOpen(true)}
         onListingsUpdated={(newListings) => setListings(newListings)}
-      />
+      />}
 
       <nav ref={sheetNavigation} className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-slate-300 bg-slate-200 px-4 pt-2" aria-label="Listing sheets">
         <button
@@ -256,13 +261,14 @@ function Workspace() {
             {category}
           </button>
         ))}
+        <button onClick={() => handleSheetChange('IClick')} aria-current={activeSheet === 'IClick' ? 'page' : undefined} className={`shrink-0 whitespace-nowrap rounded-t-md border border-b-0 px-4 py-2 text-xs font-semibold transition-colors ${activeSheet === 'IClick' ? 'border-slate-300 bg-white text-indigo-700' : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>IClick</button>
       </nav>
 
       {workspaceError&&<p role="alert" className="px-4 py-2 bg-rose-50 text-rose-700">{workspaceError} <button className="underline" onClick={refreshListings}>Refresh listings</button></p>}
-      {activeSheet!==OWNER_SHEET&&<div className="shrink-0 px-4 py-2"><button className="ui-button" onClick={()=>setShowListingReport(true)}>Paste property report</button></div>}
-      {activeSheet!==OWNER_SHEET&&user&&<DailyWork listings={listings} user={user} onOpen={setDetailId} publicationVersion={publicationVersion} onIgnore={handleIgnoreWarning}/>}
+      {activeSheet!=='IClick'&&activeSheet!==OWNER_SHEET&&<div className="shrink-0 px-4 py-2"><button className="ui-button" onClick={()=>setShowListingReport(true)}>Paste property report</button></div>}
+      {activeSheet!=='IClick'&&activeSheet!==OWNER_SHEET&&user&&<DailyWork listings={listings} user={user} onOpen={setDetailId} publicationVersion={publicationVersion} onIgnore={handleIgnoreWarning}/>}
       {/* 2. Optional Top KPI Metric Highlights */}
-      {showKPIMetrics && activeSheet !== OWNER_SHEET && (
+      {showKPIMetrics && activeSheet !== OWNER_SHEET && activeSheet !== 'IClick' && (
         <KPIMetrics
           listings={sheetListings}
           onFilterChange={handleKPITabChange}
@@ -273,7 +279,7 @@ function Workspace() {
       {/* 3. Main Workspace: Master Spreadsheet Grid & Optional AI Studio Assistant Sidebar */}
       <main className="flex min-h-0 min-w-0 flex-1 md:overflow-hidden">
         {/* Master Spreadsheet Table Area */}
-        {activeSheet === OWNER_SHEET ? <OwnerListingSheet onListingsChanged={()=>void refreshListings()} /> : <MasterPropertyGrid
+        {activeSheet==='IClick' ? <Suspense fallback={<div className="p-8 text-sm text-slate-600">Opening local IClick preview…</div>}><IclickWorkspace/></Suspense> : activeSheet === OWNER_SHEET ? <OwnerListingSheet onListingsChanged={()=>void refreshListings()} /> : <MasterPropertyGrid
           listings={sheetListings}
           publicationVersion={publicationVersion}
           onViewListing={item => setDetailId(item.id)}
@@ -303,7 +309,7 @@ function Workspace() {
         <div className="flex justify-end gap-2"><button className="ui-button" disabled={archiving} onClick={()=>setArchiveSelection([])}>Cancel</button><button className="ui-button bg-indigo-600 text-white" disabled={archiving} onClick={confirmArchive}>{archiving?'Archiving…':'Confirm archive'}</button></div>
       </ModalFrame>}
       {showChannels && <PublicationChannelsModal onClose={() => setShowChannels(false)} onChanged={() => setPublicationVersion(n => n + 1)}/>}
-      {showListingReport&&<ListingReportImport defaultCategory={activeSheet===OWNER_SHEET?'All':activeSheet} listings={listings} onClose={()=>setShowListingReport(false)} onImported={()=>{void refreshListings();setPublicationVersion(n=>n+1);}}/>}
+      {showListingReport&&<ListingReportImport defaultCategory={activeSheet===OWNER_SHEET||activeSheet==='IClick'?'All':activeSheet} listings={listings} onClose={()=>setShowListingReport(false)} onImported={()=>{void refreshListings();setPublicationVersion(n=>n+1);}}/>}
       {/* MODALS */}
       {/* 1. Add / Edit Listing Modal */}
       <ListingFormModal
@@ -313,7 +319,7 @@ function Workspace() {
         onSave={handleSaveListing}
         nextId={nextAvailableId}
         displayNumber={nextDisplayNumber}
-        defaultProjectCategory={activeSheet === 'All' || activeSheet === OWNER_SHEET ? 'Project Marketing (PM)' : activeSheet}
+        defaultProjectCategory={activeSheet === 'All' || activeSheet === 'IClick' || activeSheet === OWNER_SHEET ? 'Project Marketing (PM)' : activeSheet}
       />
 
       {/* 5. Cloud SQL Audit Trail History Modal */}
