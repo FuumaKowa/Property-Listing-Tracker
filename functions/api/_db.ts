@@ -30,6 +30,7 @@ export const listingColumns = `
   agent,
   no_tel AS "noTel",
   available_units AS "availableUnits",
+  asking_price AS "askingPrice",
   status,
   date,
   property_guru_repost_date::text AS "propertyGuruRepostDate",

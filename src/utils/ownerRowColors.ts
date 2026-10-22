@@ -5,6 +5,7 @@ export const OWNER_ROW_TONES = [
  {key:'IFU1',label:'IFU1',classes:'bg-blue-50'},
  {key:'IFU2',label:'IFU2',classes:'bg-blue-100'},
  {key:'IFU3',label:'IFU3',classes:'bg-blue-200'},
+ {key:'Invalid link',label:'Invalid link',classes:'bg-orange-100'},
  {key:'Listed',label:'Listed',classes:'bg-green-100'},
  {key:'Rejected',label:'Rejected',classes:'bg-red-100'},
 ] as const;

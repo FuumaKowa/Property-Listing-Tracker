@@ -5,6 +5,7 @@ import {ownerListingsTableSql} from '../src/db/ownerListings';
 import {promotionFixture} from './owner-promotion-fixture';
 import {DatabaseWorkflowStore} from '../src/server/workflow/database';
 import {seedWorkflow,previewUsers} from '../src/workflow/seed';
+import {productionContext} from '../src/server/workflow/production-runner';
 const pg=new PGlite();
 const db={query:async(sql:string,params?:unknown[])=>(await pg.query(sql,params)).rows as any[]};
 const transact=async<T>(fn:(tx:typeof db)=>Promise<T>)=>pg.transaction(tx=>fn({query:async(sql,params)=>(await tx.query(sql,params)).rows as any[]}));
@@ -19,6 +20,7 @@ try{
  const ownerId=w.links!.ownerId,listingId=w.links!.listingId;
  assert.equal((await db.query('SELECT status,seeding_status FROM owner_listings WHERE id=$1',[ownerId]))[0].status,'Listed');
  assert.equal((await db.query('SELECT project_category FROM listings WHERE id=$1',[listingId]))[0].project_category,'Subsale Direct Listing (SSDL)');
+ assert.equal((await db.query('SELECT asking_price FROM listings WHERE id=$1',[listingId]))[0].asking_price,'500000.00','Workflow price is synchronized to the category listing as a numeric amount');
  const retry=await store.create(brief,context);assert.equal(retry.id,w.id);
  assert.equal((await db.query('SELECT count(*)::int AS n FROM owner_listings'))[0].n,1);
  await db.query("UPDATE listings SET notes='Manual note',pm='Existing agent',location='Edited in sheet' WHERE id=$1",[listingId]);
@@ -61,5 +63,20 @@ try{
  const before=(await db.query('SELECT count(*)::int AS n FROM owner_listings'))[0].n;
  await assert.rejects(()=>store.create({...brief,reference:'WTS-202610-ROLLBACK',property:'Rollback property',phone:'0184445555'},context));
  assert.equal((await db.query('SELECT count(*)::int AS n FROM owner_listings'))[0].n,before);
- console.log('PASS workflow synchronization, duplicate/reference matching, manual resolution, field preservation, stale writes and rollback');
+ // Automatic handoff uses the same owner/category links and rejects an externally unlisted owner.
+ let auto=await store.create({...brief,reference:'WTS-AUTO-SYNC',property:'Automatic integration fixture',phone:'0129990000'},context);
+ const autoOwner=auto.links!.ownerId,autoListing=auto.links!.listingId;
+ auto=await store.action(auto.id,auto.version,{type:'addMaterial',kind:'photo',title:'Source',fileKey:'source.jpg',mime:'image/jpeg',original:true},context);
+ auto=await store.action(auto.id,auto.version,{type:'startProduction',provider:'template'},context);
+ const worker=productionContext(auto);assert.equal(worker.effective.name,'Automation');assert.equal(worker.actual.id,context.actual.id);
+ auto=await store.action(auto.id,auto.version,{type:'productionWorker',operation:'claim',runId:auto.production!.id},worker);
+ const finish={type:'productionWorker' as const,operation:'complete' as const,runId:auto.production!.id,leaseToken:auto.production!.leaseToken,outputs:[{kind:'copy' as const,title:'Copy',text:'Generated test copy'},{kind:'poster' as const,title:'Poster',fileKey:'poster.jpg',mime:'image/jpeg'},{kind:'video' as const,title:'Video',fileKey:'video.mp4',mime:'video/mp4'}]};
+ await db.query("UPDATE owner_listings SET status='Unlisted' WHERE id=$1",[autoOwner]);
+ await assert.rejects(()=>store.action(auto.id,auto.version,finish,worker),/unlisted|archived/i);
+ await db.query("UPDATE owner_listings SET status='Listed' WHERE id=$1",[autoOwner]);
+ auto=await store.action(auto.id,auto.version,finish,worker);
+ assert.equal(auto.links!.ownerId,autoOwner);assert.equal(auto.links!.listingId,autoListing);
+ assert.equal((await db.query('SELECT count(*)::int AS n FROM listings WHERE source_owner_listing_id=$1',[autoOwner]))[0].n,1);
+ assert.ok((await db.query('SELECT notes FROM listings WHERE id=$1',[autoListing]))[0].notes.includes('Generated test copy'));
+ console.log('PASS workflow synchronization, duplicate matching, automatic handoff, unlisted protection, stale writes and rollback');
 }finally{await pg.close();}

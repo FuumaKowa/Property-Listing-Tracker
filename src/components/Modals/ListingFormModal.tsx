@@ -47,6 +47,7 @@ export function ListingFormModal({
               tenure: "Freehold",
               pm: "",
               availableUnits: "",
+              askingPrice: "",
               status: "Active",
               date: "",
               renewStatus: "Not Renewed",
@@ -70,6 +71,8 @@ export function ListingFormModal({
       {label}
       <input
         type={type}
+        min={key === "askingPrice" ? "0" : undefined}
+        step={key === "askingPrice" ? "0.01" : undefined}
         className="ui-input"
         value={String(form[key] ?? "")}
         onChange={(e) => change(key, e.target.value)}
@@ -131,6 +134,7 @@ export function ListingFormModal({
           {input("Location", "location")}
           {input("Tenure", "tenure")}
           {input("Available units", "availableUnits")}
+          {input("Asking price (RM)", "askingPrice", "number")}
           {input("Lister (previously PM)", "pm")}
           <label className="ui-label">PIC (original creator)
             <input className="ui-input" readOnly value={listingToEdit ? creatorLabel(listingToEdit) : user?.displayName || user?.username || 'Signed-in creator'} />

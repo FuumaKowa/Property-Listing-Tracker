@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {ownerRowTone,OWNER_ROW_TONES} from '../src/utils/ownerRowColors';
-const stages=[null,'Contacted','IFU1','IFU2','IFU3'] as const;
+const stages=[null,'Contacted','IFU1','IFU2','IFU3','Invalid link'] as const;
 for(const stage of stages){
  const row={status:'Unlisted' as const,seedingStatus:stage};const original=JSON.stringify(row);
  assert.equal(ownerRowTone(row).key,stage??'not-contacted');
@@ -8,5 +8,5 @@ for(const stage of stages){
  assert.equal(ownerRowTone({...row,status:'Rejected'}).key,'Rejected','Rejected overrides any seeding stage');
  assert.equal(JSON.stringify(row),original,'Colour selection never changes stored values');
 }
-assert.equal(new Set(OWNER_ROW_TONES.map(value=>value.classes)).size,7,'All seven states have distinct whole-row colours');
+assert.equal(new Set(OWNER_ROW_TONES.map(value=>value.classes)).size,8,'All eight states have distinct whole-row colours');
 console.log('PASS owner colours: all stages, Listed/Rejected precedence, distinct tones, immutable records');

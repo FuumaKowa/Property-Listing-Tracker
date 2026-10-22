@@ -1,6 +1,7 @@
+import {applyProduction,invalidateProduction,productionActive,type ProductionJob,type ProductionAction} from './production';
 export type WorkflowRole = 'super_admin' | 'coordinator' | 'producer' | 'reviewer' | 'publisher' | 'viewer';
 export interface WorkflowUser { id:number; name:string; role:WorkflowRole }
-export interface WorkflowContext { actual:WorkflowUser; effective:WorkflowUser }
+export interface WorkflowContext { actual:WorkflowUser; effective:WorkflowUser; productionWorker?:boolean }
 export type MaterialKind = 'photo' | 'poster' | 'video' | 'copy';
 export interface Brief {
   reference:string; property:string; location:string; category:'Rental'|'Subsale'|'Other';
@@ -9,7 +10,7 @@ export interface Brief {
 }
 export interface Material {
   id:string; kind:MaterialKind; title:string; revision:number; original:boolean;
-  fileKey?:string; mime?:string; text?:string; replacesId?:string; replacedBy?:string;
+  fileKey?:string; mime?:string; text?:string; replacesId?:string; replacedBy?:string; productionId?:string; archivedAt?:string; archivedBy?:string;
   review:'draft'|'submitted'|'approved'|'changes'; note:string; at:string; by:string;
 }
 export interface Destination {
@@ -23,7 +24,7 @@ export interface WorkflowListing {
   id:string; version:number; brief:Brief; handedOffAt:string|null; createdAt:string; updatedAt:string;
   assignees:Record<'coordinator'|'producer'|'reviewer'|'publisher',number>;
   materials:Material[]; destinations:Destination[]; events:WorkflowEvent[];
-  destinationSelectionSaved?:boolean;
+  destinationSelectionSaved?:boolean; production?:ProductionJob;
   links?:{ownerId:number;listingId:number|null;category:string;syncedAt:string};
   sentReports:{at:string;by:string;signature:string;text:string;final:boolean}[];
 }
@@ -43,12 +44,14 @@ const channelRows:[string,string,'link'|'done',boolean?][]=[
   ['ibilik','Ibilik','link'],['speedhome','Speedhome','link'],['carousell','Carousell','link'],
 ];
 export const workflowChannels:Channel[]=channelRows.map(([id,name,completion,video])=>({id,name,completion,video:!!video}));
-export const workflowStages=['Briefing','Production','Review','Publishing','Owner update','Owner informed','On hold'] as const;
+export const workflowStages=['Briefing','Production','Publishing','Owner update','Owner informed','On hold'] as const;
 export type WorkflowStage=typeof workflowStages[number];
-export type WorkflowAction =
+export type WorkflowAction = ProductionAction
   | {type:'saveBrief';brief:Brief}
   | {type:'handoff'}
-  | {type:'addMaterial';kind:MaterialKind;title:string;text?:string;fileKey?:string;mime?:string;original?:boolean;replacesId?:string}
+  | {type:'addMaterial';kind:MaterialKind;title:string;text?:string;fileKey?:string;mime?:string;original?:boolean;generated?:boolean;replacesId?:string}
+  | {type:'addGeneratedCopy';title:string;text:string;replacesId?:string}
+  | {type:'removeMaterial';id:string}
   | {type:'submit';ids:string[]}
   | {type:'review';ids:string[];approved:boolean;note?:string}
   | {type:'addDestination'|'removeDestination';channelId:string}
@@ -88,7 +91,7 @@ export function parseBrief(raw:string):Brief {
   const reference=field('REF|REFERENCE').toUpperCase();
   const taskStart=lines.findIndex(l=>/^(?:📌\s*)?TASKS?$/i.test(l));
   const tasks:string[]=[];
-  if(taskStart>=0)for(const line of lines.slice(taskStart+1)){if(/^(?:📌|🔗|👤|🏞)|^(?:STATUS|OWNER|PROPERTY DETAILS)\b/i.test(line))break;if(line)tasks.push(line);}
+  if(taskStart>=0)for(const line of lines.slice(taskStart+1)){if(/^(?:📌|🔗|👤|🏞)|^(?:STATUS|OWNER|PROPERTY DETAILS)\b/i.test(line))break;if(line&&!/^(?:prepare\b.*(?:copywriting|marketing materials|poster|video|pictures)|submit draft for review\b)/i.test(line))tasks.push(line);}
   const source=lines.find(l=>/^https?:\/\//i.test(l)&&!/^https?:\/\/(?:wa\.me|api\.whatsapp\.com)/i.test(l))||'';
   return {reference,property:field('Property'),location:field('Location'),category:reference.startsWith('WTL')?'Rental':reference.startsWith('WTS')?'Subsale':'Other',ownerName:field('Contact Name|Name'),phone:field('Contact|Phone'),whatsapp:field('WhatsApp'),sourceUrl:source,price:field('Asking Price|Price'),details:lines.filter(l=>/^(?:Land Area|Built.up|Tenure|Lot Status|Land Grant|Property Category|Existing Oil Palm Trees|Bedrooms|Bathrooms)\s*:/i.test(l)).join('\n'),raw,permission:false,tasks:tasks.slice(0,30).map(label=>({id:uid(),label,done:false}))};
 }
@@ -105,20 +108,17 @@ export function publicationPackage(channelId:string,materials:Material[]):Materi
 }
 export function allPublished(w:WorkflowListing){return w.brief.permission&&w.destinations.length>0&&w.destinations.every(d=>!!currentPublication(d)&&!d.blocked);}
 export function needsWorkflowReview(w:WorkflowListing){
-  if(!w.handedOffAt||!w.brief.permission)return false;
-  const materials=w.materials.filter(m=>!m.replacedBy&&!m.original);
-  if(materials.some(m=>m.review==='submitted'))return true;
-  const approved=materials.filter(m=>m.review==='approved');
-  if(!w.destinations.length)return approved.length>0;
-  return w.destinations.some(d=>!d.approval&&approved.some(m=>m.kind==='copy')&&approved.some(m=>workflowChannels.find(c=>c.id===d.channelId)!.video?m.kind==='video':['photo','poster','video'].includes(m.kind)));
+  return false;
 }
 export function reportSignature(w:WorkflowListing){return JSON.stringify({brief:w.brief,destinations:w.destinations.map(d=>({id:d.channelId,approval:d.approval?.id,publication:currentPublication(d)?.id,blocked:d.blocked}))});}
 export function workflowStage(w:WorkflowListing):WorkflowStage {
   if(!w.brief.permission)return w.handedOffAt?'On hold':'Briefing';
   if(!w.handedOffAt)return 'Briefing';
+  if(productionActive(w))return 'Production';
+  if(w.production&&['failed','cancelled'].includes(w.production.status))return 'On hold';
   if(allPublished(w))return w.sentReports.some(r=>r.final&&r.signature===reportSignature(w))?'Owner informed':'Owner update';
   if(w.destinations.some(d=>d.approval||d.publications.length))return 'Publishing';
-  if(w.materials.some(m=>!m.replacedBy&&!m.original&&['submitted','approved'].includes(m.review)))return 'Review';
+  if(w.materials.some(m=>!m.replacedBy&&!m.archivedAt&&!m.original&&['submitted','approved'].includes(m.review)))return 'Publishing';
   return 'Production';
 }
 export function ownerReport(w:WorkflowListing):string {
@@ -127,7 +127,7 @@ export function ownerReport(w:WorkflowListing):string {
   const rows=workflowChannels.map((c,i)=>{
     const d=w.destinations.find(d=>d.channelId===c.id);if(!d)return `${i+1}. ${c.name} : N/A`;
     const p=currentPublication(d);
-    const status=d.blocked?'Pending':p?(c.completion==='done'?'Done':p.url):d.approval?'Pending publication':'Pending approval';
+    const status=d.blocked?'Pending':p?(c.completion==='done'?'Done':p.url):d.approval?'Pending publication':'Pending materials';
     return `${i+1}. ${c.name} : ${status}`;
   });
   return [prefix,heading,`REF: ${w.brief.reference}`,'👤 OWNER / ADVERTISER',`* Name: ${w.brief.ownerName||'Pending'}`,`* Contact: ${w.brief.phone||'Pending'}`,'',...rows].join('\n');
@@ -141,7 +141,7 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
   const w=structuredClone(source),now=new Date().toISOString();let message='';
   const permit=(role:keyof WorkflowListing['assignees'])=>requireThat(canWork(context.effective,w,role),`You do not have permission for this ${role} action.`);
   const destination=(id:string)=>{const d=w.destinations.find(d=>d.channelId===id);requireThat(d,'Select a planned destination.');return d;};
-  const materials=(ids:string[])=>{requireThat(Array.isArray(ids)&&ids.length>0&&ids.length<=100&&new Set(ids).size===ids.length,'Select at least one unique material.');return ids.map(id=>{const m=w.materials.find(m=>m.id===id);requireThat(m&&!m.replacedBy&&!m.original,'Select current prepared materials.');return m;});};
+  const materials=(ids:string[])=>{requireThat(Array.isArray(ids)&&ids.length>0&&ids.length<=100&&new Set(ids).size===ids.length,'Select at least one unique material.');return ids.map(id=>{const m=w.materials.find(m=>m.id===id);requireThat(m&&!m.replacedBy&&!m.archivedAt&&!m.original,'Select current prepared materials.');return m;});};
   const invalidate=(ids?:string[])=>{for(const d of w.destinations)if(d.approval&&(!ids||d.approval.materialIds.some(id=>ids.includes(id))))d.approval=null;};
   const setDestinations=(channelIds:string[])=>{
     requireThat(Array.isArray(channelIds)&&channelIds.length<=workflowChannels.length&&new Set(channelIds).size===channelIds.length,'Select unique publishing destinations.');
@@ -150,7 +150,10 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
     const existing=w.destinations;w.destinations=channelIds.map(channelId=>existing.find(d=>d.channelId===channelId)||{channelId,approval:null,blocked:'',publications:[]});w.destinationSelectionSaved=true;
   };
   requireThat(action&&typeof action==='object','Choose a workflow action.');
+  if(productionActive(w)&&!['productionWorker','cancelProduction','saveBrief'].includes(action.type)&&!(action.type==='addMaterial'&&action.original))throw new Error('Cancel automatic production before making manual production or publishing changes.');
   switch(action.type){
+    case 'startProduction':case 'cancelProduction':case 'manualProduction':case 'productionWorker':
+      message=applyProduction(w,action,context,now);break;
     case 'saveBrief':{
       permit('coordinator');const next=validateBrief(action.brief);
       const before={...w.brief,tasks:[],raw:''},after={...next,tasks:[],raw:''};
@@ -163,36 +166,54 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
       requireThat(w.brief.location&&w.brief.ownerName&&w.brief.phone,'Fill in location, owner name and contact before handing off.');
       w.handedOffAt=now;message='Sent owner brief to Luqman for production';break;
     case 'addMaterial':{
-      if(action.original)requireThat(canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer'),'Only the coordinator or producer can upload original materials.');else permit('producer');
+      const generated=action.generated===true;
+      if(action.original)requireThat(canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer'),'Only the coordinator or producer can upload original materials.');else if(generated){permit('coordinator');requireThat(w.brief.permission&&w.handedOffAt,'Confirm owner permission and hand off the brief before generating materials.');requireThat(action.kind==='poster'&&action.fileKey,'Only a rendered poster file can use the generated material upload.');}else permit('producer');
       requireThat(action.original||w.handedOffAt,'Send the brief to production first.');
       requireThat(['photo','poster','video','copy'].includes(action.kind),'Choose a valid material type.');
       const title=value(action.title,'Material title',200,true),text=action.kind==='copy'?value(action.text,'Copywriting',20000,true):undefined;
       requireThat(action.kind==='copy'||(typeof action.fileKey==='string'&&action.fileKey.length>0),'Upload a file for this material.');
       const old=action.replacesId?w.materials.find(m=>m.id===action.replacesId):undefined;
-      if(action.replacesId)requireThat(old&&!old.replacedBy&&old.kind===action.kind&&old.original===!!action.original,'Replace the current version of the same material type.');
+      if(action.replacesId)requireThat(old&&!old.replacedBy&&!old.archivedAt&&old.kind===action.kind&&old.original===!!action.original,'Replace the current version of the same material type.');
       const id=uid();if(old){old.replacedBy=id;invalidate([old.id]);}
-      w.materials.push({id,kind:action.kind,title,revision:(old?.revision||0)+1,original:!!action.original,fileKey:action.fileKey,mime:action.mime,text,replacesId:old?.id,review:'draft',note:'',at:now,by:context.effective.name});
-      message=`${old?'Revised':'Added'} ${action.kind}: ${title}${old?' (affected platforms need approval again)':''}`;break;
+      w.materials.push({id,kind:action.kind,title,revision:(old?.revision||0)+1,original:!!action.original,fileKey:action.fileKey,mime:action.mime,text,replacesId:old?.id,review:generated?'approved':'draft',note:generated?'Generated in the browser from supplied listing facts and photos; automatically released to Muz.':'',at:now,by:generated?'Automation':context.effective.name});
+      message=`${old?'Revised':'Added'} ${action.kind}: ${title}${old?' (affected publishing packages need updating)':''}`;break;
+    }
+    case 'addGeneratedCopy':{
+      permit('coordinator');requireThat(w.brief.permission&&w.handedOffAt,'Confirm owner permission and hand off the brief before generating materials.');
+      const title=value(action.title,'Material title',200,true),text=value(action.text,'Copywriting',20000,true),old=action.replacesId?w.materials.find(m=>m.id===action.replacesId):undefined;
+      if(action.replacesId)requireThat(old&&!old.replacedBy&&!old.archivedAt&&old.kind==='copy'&&!old.original&&old.by==='Automation','Replace only a current automated copy material.');
+      const id=uid();if(old)old.replacedBy=id;
+      w.materials.push({id,kind:'copy',title,revision:(old?.revision||0)+1,original:false,text,replacesId:old?.id,review:'approved',note:'Generated from supplied listing facts; automatically released to Muz.',at:now,by:'Automation'});
+      message=`Generated copywriting for Muz: ${title}`;break;
+    }
+    case 'removeMaterial':{
+      const material=w.materials.find(m=>m.id===action.id);
+      requireThat(material&&!material.replacedBy&&!material.archivedAt,'Select a current material to remove.');
+      const mayRemove=material.original
+        ?canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer')
+        :canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer')||canWork(context.effective,w,'publisher');
+      requireThat(mayRemove,'You do not have permission to remove this material.');
+      material.archivedAt=now;material.archivedBy=context.effective.name;
+      for(const d of w.destinations)if(d.approval?.materialIds.includes(material.id)&&!currentPublication(d))d.approval=null;
+      message=`Removed ${material.kind} from current materials: ${material.title}; history retained`;
+      break;
     }
     case 'submit':
-      permit('producer');for(const m of materials(action.ids)){requireThat(['draft','changes'].includes(m.review),'Only draft materials or requested changes can be submitted.');m.review='submitted';m.note='';}
-      message=`Submitted ${action.ids.length} material(s) for review`;break;
+      permit('producer');for(const m of materials(action.ids)){requireThat(['draft','changes'].includes(m.review),'Only draft materials or requested changes can be sent.');m.review='approved';m.note='Automatically released to Muz; no reviewer approval is required.';}
+      message=`Sent ${action.ids.length} prepared material(s) to Muz automatically`;break;
     case 'review':{
-      permit('reviewer');requireThat(typeof action.approved==='boolean','Choose approve or request changes.');
-      const note=value(action.note||'','Review comment',2000,!action.approved);
-      for(const m of materials(action.ids)){requireThat(m.review==='submitted','Only submitted materials can be reviewed.');m.review=action.approved?'approved':'changes';m.note=note;}
-      message=`${action.approved?'Approved':'Requested changes to'} ${action.ids.length} material(s)${note?': '+note:''}`;break;
+      throw new Error('Manual reviewer approval is disabled. Prepared materials are released to Muz automatically.');
     }
     case 'addDestination':
-      permit('reviewer');requireThat(workflowChannels.some(c=>c.id===action.channelId),'Choose a publication channel.');
+      permit('publisher');requireThat(workflowChannels.some(c=>c.id===action.channelId),'Choose a publication channel.');
       requireThat(!w.destinations.some(d=>d.channelId===action.channelId),'That destination is already selected.');
       w.destinations.push({channelId:action.channelId,approval:null,blocked:'',publications:[]});message=`Selected ${workflowChannels.find(c=>c.id===action.channelId)!.name}`;break;
     case 'setDestinations':{
-      permit('reviewer');setDestinations(action.channelIds);
-      message=`Saved ${w.destinations.length} publishing destination(s); unchecked platforms are excluded\nSelected: ${w.destinations.map(d=>workflowChannels.find(c=>c.id===d.channelId)!.name).join(', ')||'None'}`;break;
+      permit('publisher');setDestinations(action.channelIds);
+      message=`Muz selected ${w.destinations.length} publishing destination(s); unchecked platforms are excluded\nSelected: ${w.destinations.map(d=>workflowChannels.find(c=>c.id===d.channelId)!.name).join(', ')||'None'}`;break;
     }
     case 'approveForPublishing':{
-      permit('reviewer');requireThat(w.brief.permission,'Owner permission is required before approval.');requireThat(w.handedOffAt,'Send the brief to production first.');
+      permit('publisher');requireThat(w.brief.permission,'Owner permission is required before publishing.');requireThat(w.handedOffAt,'Send the brief to production first.');
       requireThat(w.brief.tasks.every(t=>t.done),'Resolve the required checks in the owner brief first.');
       const chosen=materials(action.materialIds);
       requireThat(chosen.every(m=>['submitted','approved'].includes(m.review)),'Select only submitted or already approved materials.');
@@ -204,32 +225,32 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
       for(const m of chosen)if(used.has(m.id)&&m.review==='submitted'){m.review='approved';m.note='';approvedCount++;}
       for(const item of ready){item.destination.approval={id:uid(),materialIds:item.package.map(m=>m.id),at:now,by:context.effective.name};item.destination.blocked='';}
       const pending=w.destinations.filter(d=>!d.approval).length;
-      message=`Approved ${approvedCount} material(s) and sent ${ready.length} destination(s) to Muz for publishing${pending?`; ${pending} destination(s) remain pending`:''}\nPlatforms: ${ready.map(item=>workflowChannels.find(c=>c.id===item.destination.channelId)!.name).join(', ')}\nMaterials: ${chosen.filter(m=>used.has(m.id)).map(m=>m.title+' v'+m.revision).join(', ')}`;
+      message=`Muz selected ${ready.length} ready publishing destination(s)${pending?`; ${pending} destination(s) are waiting for materials`:''}\nPlatforms: ${ready.map(item=>workflowChannels.find(c=>c.id===item.destination.channelId)!.name).join(', ')}\nMaterials: ${chosen.filter(m=>used.has(m.id)).map(m=>m.title+' v'+m.revision).join(', ')}`;
       break;
     }
     case 'removeDestination':{
-      permit('reviewer');const d=destination(action.channelId);requireThat(!d.publications.length,'A published destination must retain its history.');
+      permit('publisher');const d=destination(action.channelId);requireThat(!d.publications.length,'A published destination must retain its history.');
       w.destinations=w.destinations.filter(x=>x!==d);message=`Removed destination ${workflowChannels.find(c=>c.id===action.channelId)!.name}`;break;
     }
     case 'approveDestination':{
-      permit('reviewer');requireThat(w.brief.permission,'Owner permission is required before approval.');requireThat(w.handedOffAt,'Send the brief to production first.');
+      permit('publisher');requireThat(w.brief.permission,'Owner permission is required before publishing.');requireThat(w.handedOffAt,'Send the brief to production first.');
       requireThat(w.brief.tasks.every(t=>t.done),'Resolve the required checks in the owner brief first.');
       const d=destination(action.channelId),chosen=materials(action.materialIds),c=workflowChannels.find(c=>c.id===d.channelId)!;
       requireThat(chosen.every(m=>m.review==='approved'),'Every selected material must be approved first.');
       requireThat(chosen.some(m=>m.kind==='copy')&&chosen.some(m=>c.video?m.kind==='video':['photo','poster','video'].includes(m.kind)),c.video?'Choose approved video and copywriting.':'Choose approved visual material and copywriting.');
       requireThat(!d.approval||JSON.stringify([...d.approval.materialIds].sort())!==JSON.stringify([...action.materialIds].sort()),'This exact package is already approved.');
-      d.approval={id:uid(),materialIds:chosen.map(m=>m.id),at:now,by:context.effective.name};d.blocked='';message=`Approved ${c.name} using ${chosen.map(m=>m.title+' v'+m.revision).join(', ')}`;break;
+      d.approval={id:uid(),materialIds:chosen.map(m=>m.id),at:now,by:context.effective.name};d.blocked='';message=`Prepared ${c.name} publishing package using ${chosen.map(m=>m.title+' v'+m.revision).join(', ')}`;break;
     }
     case 'publish':{
       permit('publisher');requireThat(w.brief.permission,'Owner permission has been withdrawn.');
-      const d=destination(action.channelId),c=workflowChannels.find(c=>c.id===d.channelId)!;requireThat(d.approval,'This destination needs approval before publishing.');
+      const d=destination(action.channelId),c=workflowChannels.find(c=>c.id===d.channelId)!;requireThat(d.approval,'Send this destination to publishing before recording the live ad.');
       requireThat(!currentPublication(d),'This approved package is already recorded as published.');
-      requireThat(materials(d.approval.materialIds).every(m=>m.review==='approved'),'The approved materials have changed. Request approval again.');
+      requireThat(materials(d.approval.materialIds).every(m=>m.review==='approved'),'The prepared materials changed. Send the updated package to publishing.');
       const url=c.completion==='link'?httpUrl(value(action.url,'Ad URL',2048,true),true):'';
       d.publications.unshift({id:uid(),approvalId:d.approval.id,url,note:value(action.note||'','Publication note',2000),at:now,by:context.effective.name});d.blocked='';message=`${c.completion==='link'?'Published':'Completed'} ${c.name}${url?': '+url:''}`;break;
     }
     case 'block':{
-      permit('publisher');const d=destination(action.channelId);requireThat(d.approval,'Wait for destination approval.');
+      permit('publisher');const d=destination(action.channelId);requireThat(d.approval,'Send the destination to publishing with its required materials first.');
       requireThat(!currentPublication(d),'This destination is already published.');
       d.blocked=value(action.note,'Block reason',2000,true);message=`Publishing blocked: ${workflowChannels.find(c=>c.id===d.channelId)!.name} — ${d.blocked}`;break;
     }
@@ -241,5 +262,6 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
     }
     default:throw new Error('Unknown workflow action.');
   }
+  if(action.type==='saveBrief'||(action.type==='addMaterial'&&action.original))invalidateProduction(w);
   w.version++;w.updatedAt=now;w.events.unshift({id:uid(),at:now,actualName:context.actual.name,effectiveName:context.effective.name,message});return w;
 }

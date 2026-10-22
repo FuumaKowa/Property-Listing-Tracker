@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { History, Pencil, Trash2, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, History, Pencil, Trash2, Star, SlidersHorizontal } from "lucide-react";
 import { PropertyListing, FilterState, PROJECT_CATEGORIES } from "../types";
 import { fetchPublicationSummaries } from "../services/publications";
 import type { PublicationSummary } from "../publications";
@@ -41,6 +41,7 @@ export function MasterPropertyGrid({
 }: Props) {
   const [priorityOnly, setPriorityOnly] = useState(false);
   const [pic, setPic] = useState('All');
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [priorityBusy, setPriorityBusy] = useState<number[]>([]);
   const [selected, setSelected] = useState<number[]>([]),
     [summaries, setSummaries] = useState<PublicationSummary[]>([]),
@@ -124,6 +125,11 @@ export function MasterPropertyGrid({
     );
   const allSelected =
     filtered.length > 0 && filtered.every((p) => selected.includes(p.id));
+  const activeFilterCount = [
+    filters.searchQuery.trim() !== '', filters.status !== 'All', filters.projectCategory !== 'All',
+    filters.renewStatus !== 'All', priorityOnly, pic !== 'All', filters.pm !== 'All',
+    filters.location !== 'All', filters.tenure !== 'All',
+  ].filter(Boolean).length;
   const selectAll = () =>
     setSelected((prev) =>
       allSelected
@@ -283,7 +289,14 @@ export function MasterPropertyGrid({
           Click a property address for details and published ads.
         </p>
       </div>
-      <div className="flex flex-wrap gap-2 rounded-t-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-t-xl border border-slate-200 bg-white">
+        <div className="flex items-center justify-between gap-3 px-3 py-2">
+          <button type="button" aria-label={filtersOpen ? 'Hide listing search and filters' : 'Show listing search and filters'} aria-expanded={filtersOpen} aria-controls="listing-search-filters" onClick={() => setFiltersOpen(open => !open)} className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            <SlidersHorizontal size={15}/><span>Search &amp; filters</span>{activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-1.5 text-indigo-800">{activeFilterCount} active</span>}{filtersOpen ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}
+          </button>
+          <span className="text-xs text-slate-500">{filtered.length} matching listings</span>
+        </div>
+        {filtersOpen && <div id="listing-search-filters" className="flex flex-wrap gap-2 border-t border-slate-100 p-4">
         <input
           className="ui-input !w-full sm:!w-72"
           aria-label="Search properties"
@@ -365,6 +378,7 @@ export function MasterPropertyGrid({
         <button className="ui-button" onClick={reset}>
           Reset Filters
         </button>
+        </div>}
       </div>
       {summaryError && (
         <div role="alert" className="bg-amber-50 p-3 text-xs text-amber-800">

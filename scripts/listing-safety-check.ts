@@ -8,7 +8,7 @@ assert(existsSync('functions/api/_listings.ts'),'Shared audited listing service 
 const {handleListings}=await import('../functions/api/_listings');
 const pg=new PGlite();
 try {
- await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp DEFAULT now(),created_at timestamp DEFAULT now());
+ await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,asking_price numeric(18,2),status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp DEFAULT now(),created_at timestamp DEFAULT now());
  CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer NOT NULL REFERENCES listings(id) ON DELETE CASCADE,action text NOT NULL,changed_fields text,user_name text,user_uid text,user_email text,timestamp timestamp DEFAULT now());
  CREATE TABLE owner_listings(id serial PRIMARY KEY,property_name text);INSERT INTO owner_listings(property_name) VALUES('Preserved owner');
  INSERT INTO listings(property,location,pm) VALUES('Legacy','KL','Old PM');`);
@@ -16,7 +16,8 @@ try {
  let user:any={id:7,username:'creator',displayName:'Creator',role:'user'};
  const services:any={getSessionUser:async()=>user,getDb:()=>({query:async(sql:string,params:unknown[])=>(await pg.query(sql,params)).rows})};
  const call=async(method:string,body?:unknown,id?:number,restore=false)=>handleListings({env:{DATABASE_URL:'test'},request:new Request('https://test/api/listings',{method,body:body===undefined?undefined:JSON.stringify(body)}),id:id===undefined?undefined:String(id),restore},services);
- let r=await call('POST',{property:'New',location:'KL',pm:'Lister',createdByName:'Fake'});assert.equal(r.status,201);const created=(await r.json()).data;
+ let r=await call('POST',{property:'New',location:'KL',pm:'Lister',askingPrice:'450000',createdByName:'Fake'});assert.equal(r.status,201);const created=(await r.json()).data;assert.equal(created.askingPrice,'450000.00');
+ assert.equal((await call('PATCH',{version:1,askingPrice:'1,000'},created.id)).status,400,'Prices with punctuation remain invalid numeric input');
  assert.equal(created.version,1);assert.equal(created.createdByName,'Creator');
  user={...user,id:8,displayName:'Editor'};
  r=await call('PATCH',{version:1,pm:'Updated lister',isPriority:true,createdByName:'Spoof'},created.id);assert.equal(r.status,200);const edited=(await r.json()).data;assert.equal(edited.version,2);assert.equal(edited.createdByName,'Creator');

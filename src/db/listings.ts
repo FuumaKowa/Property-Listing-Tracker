@@ -53,6 +53,7 @@ export async function getAllListingsFromDb() {
         tenure: item.tenure,
         pm: item.pm,
         availableUnits: item.availableUnits,
+        askingPrice: item.askingPrice || null,
         status: item.status,
         date: item.date,
         renewStatus: item.renewStatus,
@@ -112,6 +113,7 @@ export async function createListingInDb(
     agent?: string;
     noTel?: string;
     availableUnits: string;
+    askingPrice?: string | null;
     status: string;
     date: string;
     renewStatus: string;
@@ -140,6 +142,7 @@ export async function createListingInDb(
         agent: data.agent || null,
         noTel: data.noTel || null,
         availableUnits: data.availableUnits || '-',
+        askingPrice: data.askingPrice || null,
         status: data.status || 'Active',
         date: data.date || '',
         renewStatus: data.renewStatus || 'Not Renewed',
@@ -187,6 +190,7 @@ export async function updateListingInDb(
     agent?: string;
     noTel?: string;
     availableUnits?: string;
+    askingPrice?: string | null;
     status?: string;
     date?: string;
     renewStatus?: string;
@@ -202,7 +206,7 @@ export async function updateListingInDb(
     const [updated] = await db
       .update(listings)
       .set({
-        ...Object.fromEntries(Object.entries(updates).filter(([key]) => ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'].includes(key))),
+        ...Object.fromEntries(Object.entries(updates).filter(([key]) => ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','askingPrice','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'].includes(key))),
         ...validatePriority(updates),
         ...validateRepostFields(updates),
         updatedByUserId: userInfo.uid || null,

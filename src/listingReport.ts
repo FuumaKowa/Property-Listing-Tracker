@@ -1,7 +1,7 @@
 import {parsePublicationReport,matchReportChannel,type ReportEntry} from './reportImport';
 import type {PublicationChannel} from './publications';
 import type {PropertyListing,ProjectCategory} from './types';
-export interface ListingReportData {property:string;location:string;reference:string;ownerName:string;phone:string;price:string;category:ProjectCategory|null;links:(ReportEntry&{channelId:number|null})[]}
+export interface ListingReportData {property:string;location:string;reference:string;ownerName:string;phone:string;price:string;priceValue:string;category:ProjectCategory|null;links:(ReportEntry&{channelId:number|null})[]}
 export interface ListingReportPreview extends ListingReportData {candidates:PropertyListing[];selectedListingId:number|null;issue?:string}
 export const reportIdentity=(text:string)=>text.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export const isPendingReportLocation=(value:string|null|undefined)=>['','-','pending','pending details','location not provided','not provided','not captured','unknown'].includes((value||'').trim().toLowerCase());
@@ -34,7 +34,22 @@ export function parseListingReport(raw:string,channels:PublicationChannel[],know
  const sale=/^FOR\s+SALE\b/i.test(heading)||reference.startsWith('WTS-'),rent=/^FOR\s+RENT\b/i.test(heading)||reference.startsWith('WTL-');
  if(sale&&rent)throw new Error('The sale/rental heading conflicts with the reference.');
  const category:ProjectCategory|null=rent?'Rental':/^AUCTION\b/i.test(heading)?'Auction':/^NEW\s+PROJECT\b/i.test(heading)?'Project Marketing (PM)':sale?'Subsale Direct Listing (SSDL)':null;
- const price=/\bRM\s*([\d,]+(?:\.\d{1,2})?)/i.exec(heading)?.[1]||'';
+ const normalizePrice=(value:string|undefined,suffix='')=>{
+  if(!value)return '';
+  const compact=value.replace(/\s/g,'');
+  if(!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(compact))return '';
+  const [whole,fraction='']=compact.replace(/,/g,'').split('.'),unit=suffix.toLowerCase();
+  const multiplier=['m','mil','million'].includes(unit)?1_000_000n:unit==='k'?1_000n:1n;
+  const cents=(BigInt(whole)*100n+BigInt(fraction.padEnd(2,'0')))*multiplier;
+  const integer=(cents/100n).toString(),decimal=(cents%100n).toString().padStart(2,'0');
+  if(integer.length>16)return '';
+  return decimal==='00'?integer:`${integer}.${decimal.replace(/0$/,'')}`;
+ };
+ const explicitPrice=/(?:asking\s*price|monthly\s*(?:rental|rent)|rental\s*price|price)\s*:?\s*(?:RM\s*)?([\d,]+(?:\.\d{1,2})?)\s*(million|mil|m|k)?\b/i.exec(text);
+ const headingPrice=/\bRM\s*([\d,]+(?:\.\d{1,2})?)\s*(million|mil|m|k)?\b/i.exec(heading);
+ const copyPrice=/\bRM\s*([\d,]+(?:\.\d{1,2})?)\s*(million|mil|m|k)?\b/i.exec(lines.slice(1).join('\n'));
+ const priceValue=normalizePrice(explicitPrice?.[1],explicitPrice?.[2])||normalizePrice(headingPrice?.[1],headingPrice?.[2])||normalizePrice(copyPrice?.[1],copyPrice?.[2]);
+ const price=priceValue?(()=>{const [whole,fraction]=priceValue.split('.');return whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')+(fraction?'.'+fraction:'');})():'';
  const links=parsePublicationReport(text.replace(/^(\s*\d+)\s+(?=[A-Za-z])/gm,'$1. ')).map(e=>({...e,channelId:matchReportChannel(e,channels)}));
- return {property,location,reference,ownerName,phone,price,category,links};
+ return {property,location,reference,ownerName,phone,price,priceValue,category,links};
 }

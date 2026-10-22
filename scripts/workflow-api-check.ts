@@ -19,6 +19,8 @@ try{
   assert.equal((await req('/switch',{userId:2},{'X-Workflow-CSRF':''})).status,403);
   assert.equal((await req('/switch',{userId:2})).status,200);
   let w=(await (await req('/listings')).json()).listings[0];
+  assert.equal((await req(`/listings/${w.id}/actions`,{version:w.version,action:{type:'productionWorker',operation:'claim',runId:'forged'},productionWorker:true})).status,403);
+  assert.equal((await req(`/listings/${w.id}/actions`,{version:w.version,action:{type:'startProduction',provider:'template'}})).status,503);
   assert.equal((await req(`/listings/${w.id}/actions`,{version:w.version,action:{type:'handoff'}})).status,200);
   assert.equal((await req(`/listings/${w.id}/actions`,{version:w.version,action:{type:'handoff'}})).status,409);
   w=(await (await req('/listings')).json()).listings[0];

@@ -1,7 +1,7 @@
 export const OWNER_SHEET = 'Master Listing Owner' as const;
 export const OWNER_PROPERTY_TYPES = ['landed', 'highrise', 'land', 'commercial', 'pending'] as const;
 export const OWNER_STATUSES = ['Listed', 'Unlisted', 'Rejected'] as const;
-export const OWNER_SEEDING_STAGES = ['IFU1', 'IFU2', 'IFU3', 'Contacted'] as const;
+export const OWNER_SEEDING_STAGES = ['IFU1', 'IFU2', 'IFU3', 'Contacted', 'Invalid link'] as const;
 
 export interface OwnerListingInput {
   transactionType?: 'rent' | 'sale' | null;
