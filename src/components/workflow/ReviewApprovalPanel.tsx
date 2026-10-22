@@ -4,7 +4,7 @@ import {currentPublication,publicationPackage,workflowChannels} from '../../work
 import {Badge,MaterialPreview,type PanelProps} from './shared';
 
 export function ReviewApprovalPanel({listing:w,busy,onAction,onDirty}:PanelProps){
-  const current=w.materials.filter(m=>!m.replacedBy);
+  const current=w.materials.filter(m=>!m.replacedBy&&!m.archivedAt);
   const [channelIds,setChannelIds]=useState<string[]>(()=>w.destinations.length||w.destinationSelectionSaved?w.destinations.map(d=>d.channelId):[]);
   const [materialIds,setMaterialIds]=useState<string[]>(()=>current.filter(m=>!m.original&&(m.review==='approved'||(m.review==='submitted'&&m.kind!=='video'))).map(m=>m.id));
   const chosen=current.filter(m=>!m.original&&materialIds.includes(m.id)&&['submitted','approved'].includes(m.review));
@@ -42,7 +42,8 @@ export function ReviewApprovalPanel({listing:w,busy,onAction,onDirty}:PanelProps
           return <article className={`wf-material-card ${selected?'wf-selected':''}`} key={m.id}>
             <label className="wf-material-heading"><input type="checkbox" aria-label={`Use ${m.title}`} checked={selected} disabled={busy||!eligible} onChange={e=>{setMaterialIds(ids=>e.target.checked?[...ids,m.id]:ids.filter(id=>id!==m.id));onDirty(true,'review-materials');}}/><div><h4>{m.title}</h4><span>{m.kind} · version {m.revision}</span></div><Badge tone={m.original?'slate':eligible?'green':'slate'}>{m.original?'Owner original':eligible?'Ready for Muz':'Not submitted'}</Badge></label>
           <MaterialPreview material={m} compact/>
-            {!eligible&&!m.original&&<p className="wf-material-wait">{m.review==='changes'?'Luqman needs to revise and send this material.':'Luqman needs to submit this material to Muz.'}</p>}{m.original&&<p className="wf-material-wait">Owner-supplied reference asset. Prepared materials are selected for publishing.</p>}
+            {!eligible&&!m.original&&<p className="wf-material-wait">{m.review==='changes'?'Luqman needs to revise and send this material.':'Luqman needs to submit this material to Muz.'}</p>}
+            {m.original&&<p className="wf-material-wait">Owner-supplied reference asset. Prepared materials are selected for publishing.</p>}
           </article>;
         })}</div>
       </div>

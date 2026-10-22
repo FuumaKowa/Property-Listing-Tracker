@@ -70,6 +70,7 @@ export function PropertyDetailsModal({
     ["PIC", creatorLabel(listing)],
     ["Lister phone", listing.noTel],
     ["Available units", listing.availableUnits],
+    ["Asking price", listing.askingPrice ? `RM ${Number(listing.askingPrice).toLocaleString('en-MY')}` : "Not provided"],
     ["Status", listing.status === "Sold Out" ? "Sold" : listing.status],
     ["Renewal", listing.renewStatus],
     ["Negotiator", listing.negotiator],

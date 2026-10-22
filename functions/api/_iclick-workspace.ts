@@ -52,7 +52,7 @@ export async function handleIclickWorkspace({request,env}:{request:Request;env:I
    const ids=items.map((row:any)=>Number(row.id));
    const photos=ids.length?await db.query('SELECT id,listing_id AS "listingId",file_key AS "fileKey",title,content_type AS "contentType",byte_size AS "byteSize",created_at AS "createdAt" FROM iclick_listing_images WHERE listing_id=ANY($1::int[]) ORDER BY id',[ids]):[];
    const data=items.map((row:any)=>{
-    const workflow=row.workflowData,materials=Array.isArray(workflow?.materials)?workflow.materials.filter((item:any)=>item&&!item.replacedBy&&!item.original&&item.review==='approved'):[];
+    const workflow=row.workflowData,materials=Array.isArray(workflow?.materials)?workflow.materials.filter((item:any)=>item&&!item.replacedBy&&!item.archivedAt&&!item.original&&item.review==='approved'):[];
     const copy=[...materials].filter((item:any)=>item.kind==='copy'&&typeof item.text==='string'&&item.text.trim()).sort((a:any,b:any)=>String(b.at||'').localeCompare(String(a.at||'')))[0];
     const images=photos.filter((image:any)=>Number(image.listingId)===Number(row.id)).map((image:any)=>({...image,url:new URL(`/api/iclick-workspace/listings/${row.id}/images/${image.fileKey}`,request.url).toString()}));
     return {id:Number(row.id),version:Number(row.version),reference:workflow?.brief?.reference||row.reference||null,property:row.property,category:row.projectCategory,location:row.location,tenure:row.tenure||null,availableUnits:row.availableUnits||null,askingPrice:row.askingPrice===null?null:Number(row.askingPrice),copywriting:copy?.text||null,images};

@@ -313,4 +313,3 @@ try {
 } finally {
   await pg.close();
 }
-

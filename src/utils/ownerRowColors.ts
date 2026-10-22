@@ -14,4 +14,3 @@ export function ownerRowTone(row:Pick<OwnerListing,'status'|'seedingStatus'>){
  const key=row.status==='Listed'||row.status==='Rejected'?row.status:row.seedingStatus;
  return OWNER_ROW_TONES.find(tone=>tone.key===key)??OWNER_ROW_TONES[0];
 }
-

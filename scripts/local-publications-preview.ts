@@ -12,6 +12,8 @@ import { readFileSync } from 'node:fs';
 import {resolve} from 'node:path';
 
 import { createServer } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 import { createPublicationsRouter } from '../src/server/publications/express';
 
@@ -24,7 +26,7 @@ import { listingColumns } from '../functions/api/_db';
 const pg = new PGlite();
 await pg.exec("SET TIME ZONE 'UTC'");
 
-await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp DEFAULT now(),created_at timestamp DEFAULT now());`);
+await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,asking_price numeric(18,2),status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp DEFAULT now(),created_at timestamp DEFAULT now());`);
 
 await pg.exec(readFileSync('drizzle/0001_publication_channels.sql','utf8'));
 
@@ -44,7 +46,7 @@ await pg.exec(`INSERT INTO listings(property,project_category,location,tenure,pm
 
 ('Lakeview Suites','Rental','Cyberjaya','Leasehold','Daniel (sample)','Mei (sample)',NULL,'Not captured','2','Expired','2020-09-20','In Progress','Fully furnished. Sample record.','Preview');
 
-UPDATE listings SET property_guru_repost_date='2099-10-11',property_guru_repost_mode='Auto' WHERE id=1;
+UPDATE listings SET property_guru_repost_date='2099-10-11',property_guru_repost_mode='Auto',asking_price=1550000 WHERE id=1;
 
 INSERT INTO listing_publications(listing_id,channel_id,url,label) VALUES (1,1,'https://example.com/propertyguru/maple','Main advertisement'),(1,2,'https://example.com/mudah/maple','Mudah listing'),(1,3,'https://example.com/telegram/1','September feature'),(1,3,'https://example.com/telegram/2','Viewing announcement'),(1,4,'https://example.com/tiktok/maple','Walkthrough video');`);
 
@@ -85,7 +87,13 @@ if(process.env.WORKFLOW_DATABASE_PREVIEW==='1'){
   const {createWorkflowRouter}=await import('../src/server/workflow/router');
   const {previewUsers}=await import('../src/workflow/seed');
   const store=new LocalWorkflowStore(process.env.WORKFLOW_PREVIEW_DIR||'.server/workflow-preview');await store.init();
-  app.use('/api/workflow',createWorkflowRouter(store,async()=>previewUsers[0]));
+  const {ProductionRunner}=await import('../src/server/workflow/production-runner');
+  const {localProductionConfig}=await import('../src/server/workflow/production-config');
+  const {readFile}=await import('node:fs/promises');
+  const config=await localProductionConfig();
+  const runner=new ProductionRunner(store,{read:async(_w,key)=>readFile(store.filePath(key)),put:async(_w,data,ext)=>store.putFile(data,ext),remove:async(_w,key)=>store.removeFile(key)},config);
+  runner.start();
+  app.use('/api/workflow',createWorkflowRouter(store,async()=>previewUsers[0],{enabled:true,openaiReady:!!config.apiKey}));
 }
 
 let failNextSave=false;
@@ -134,6 +142,6 @@ app.use((req,res,next)=>{
   if(/(?:^|\/)\.(?:server|git)(?:\/|$)/.test(path)||path.includes(privateWorkflowDirectory.toLowerCase()))return void res.status(403).end();
   next();
 });
-const vite=await createServer({envDir:'.server/preview-empty-env',server:{middlewareMode:true,fs:{deny:['.env','.env.*','*.{crt,pem}','**/.git/**','**/.server/**',privateWorkflowDirectory+'/**']},hmr:{port:previewPort+1000}},appType:'spa'});app.use(vite.middlewares);
+const vite=await createServer({configFile:false,root:process.cwd(),plugins:[react(),tailwindcss()],envDir:'.server/preview-empty-env',resolve:{alias:{'@':process.cwd()}},server:{middlewareMode:true,fs:{deny:['.env','.env.*','*.{crt,pem}','**/.git/**','**/.server/**',privateWorkflowDirectory+'/**']},hmr:{port:previewPort+1000}},appType:'spa'});app.use(vite.middlewares);
 
 app.listen(previewPort,'127.0.0.1',()=>console.log(`Integrated preview: http://127.0.0.1:${previewPort} (synthetic local data only)`));

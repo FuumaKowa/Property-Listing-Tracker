@@ -18,7 +18,7 @@ async function authorized(request:Request,configured?:string){
  return diff===0;
 }
 function usableMaterials(data:any){
- const current=Array.isArray(data?.materials)?data.materials.filter((item:any)=>item&&!item.replacedBy&&!item.original&&item.review==='approved'):[];
+ const current=Array.isArray(data?.materials)?data.materials.filter((item:any)=>item&&!item.replacedBy&&!item.archivedAt&&!item.original&&item.review==='approved'):[];
  const copy=[...current].filter((item:any)=>item.kind==='copy'&&typeof item.text==='string'&&item.text.trim()).sort((a:any,b:any)=>String(b.at||'').localeCompare(String(a.at||'')))[0];
  const images=current.filter((item:any)=>['photo','poster'].includes(item.kind)&&typeof item.fileKey==='string'&&typeof item.mime==='string'&&item.mime.startsWith('image/'))
    .sort((a:any,b:any)=>String(a.at||'').localeCompare(String(b.at||'')));
@@ -53,8 +53,16 @@ export async function handleIclick({request,env}:{request:Request;env:IclickEnv}
     WHERE l.id=COALESCE($1,l.id) AND l.id>$2 AND l.status='Active' AND l.archived_at IS NULL
     ORDER BY l.id ASC LIMIT $3`,[requestedId,cursor,limit+1]);
    const hasMore=!listingMatch&&rows.length>limit,items=rows.slice(0,listingMatch?1:limit);
+   const listingIds=items.map((row:any)=>Number(row.id));
+   const uploadedImages=listingIds.length?await services.connect(env).query(`
+    SELECT id,listing_id AS "listingId",file_key AS "fileKey",title,content_type AS "contentType",created_at AS "createdAt"
+    FROM iclick_listing_images WHERE listing_id=ANY($1::int[]) ORDER BY id`,[listingIds]):[];
    const data=items.map((row:any)=>{
-    const {copy,images}=usableMaterials(row.workflowData),missing:string[]=[];
+    const {copy,images:workflowImages}=usableMaterials(row.workflowData),missing:string[]=[];
+    const images=[...uploadedImages.filter((image:any)=>Number(image.listingId)===Number(row.id)).map((image:any)=>({
+     id:String(image.id),title:image.title||'Listing image',mime:image.contentType,
+     fileKey:image.fileKey,source:'iclick',at:image.createdAt,
+    })),...workflowImages.map((image:any)=>({...image,source:'workflow'}))];
     const price=row.askingPrice===null||row.askingPrice===undefined||row.askingPrice===''?NaN:Number(row.askingPrice);
     if(!String(row.property||'').trim()||/^pending(?: details)?$/i.test(String(row.property).trim()))missing.push('property');
     if(!String(row.location||'').trim()||/^pending(?: details)?$/i.test(String(row.location).trim()))missing.push('location');
@@ -73,13 +81,14 @@ export async function handleIclick({request,env}:{request:Request;env:IclickEnv}
    return response({version:'1.0',data,...(hasMore?{nextCursor:String(items.at(-1).id)}:{})});
   }
   if(imageMatch){
-   const listingId=Number(imageMatch[1]),fileKey=imageMatch[2];
-   const db=services.connect(env),row=(await db.query("SELECT w.data FROM marketing_workflows w JOIN listings l ON l.id=w.listing_id WHERE l.id=$1 AND l.status='Active' AND l.archived_at IS NULL",[listingId]))[0];
-   const material=(row?.data?.materials||[]).find((item:any)=>item?.fileKey===fileKey&&!item.replacedBy&&!item.original&&item.review==='approved'&&['photo','poster'].includes(item.kind)&&typeof item.mime==='string'&&item.mime.startsWith('image/'));
-   if(!material||!fileKeyPattern.test(fileKey))return response({error:'Approved listing image not found.'},404);
+   const listingId=Number(imageMatch[1]),fileKey=imageMatch[2],db=services.connect(env);
+   const uploaded=(await db.query("SELECT i.object_key AS \"objectKey\",i.content_type AS \"contentType\" FROM iclick_listing_images i JOIN listings l ON l.id=i.listing_id WHERE l.id=$1 AND l.status='Active' AND l.archived_at IS NULL AND i.file_key=$2",[listingId,fileKey]))[0];
+   const row=uploaded?null:(await db.query("SELECT w.data FROM marketing_workflows w JOIN listings l ON l.id=w.listing_id WHERE l.id=$1 AND l.status='Active' AND l.archived_at IS NULL",[listingId]))[0];
+   const material=(row?.data?.materials||[]).find((item:any)=>item?.fileKey===fileKey&&!item.replacedBy&&!item.archivedAt&&!item.original&&item.review==='approved'&&['photo','poster'].includes(item.kind)&&typeof item.mime==='string'&&item.mime.startsWith('image/'));
+   if((!uploaded&&!material)||!fileKeyPattern.test(fileKey))return response({error:'Approved listing image not found.'},404);
    const bucket=services.media(env);if(!bucket)return response({error:'Private image storage is not configured.'},503);
-   const object=await bucket.get(`${row.data.id}/${fileKey}`,{range:request.headers});if(!object)return response({error:'Listing image not found.'},404);
-   const headers=new Headers({'Content-Type':material.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Disposition':'inline'});
+   const object=await bucket.get(uploaded?uploaded.objectKey:`${row.data.id}/${fileKey}`,{range:request.headers});if(!object)return response({error:'Listing image not found.'},404);
+   const headers=new Headers({'Content-Type':uploaded?.contentType||material.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Disposition':'inline'});
    if(object.range){headers.set('Content-Range',`bytes ${object.range.offset}-${object.range.offset+object.range.length-1}/${object.size}`);headers.set('Content-Length',String(object.range.length));headers.set('Accept-Ranges','bytes');return new Response(object.body,{status:206,headers});}
    headers.set('Content-Length',String(object.size));return new Response(object.body,{headers});
   }

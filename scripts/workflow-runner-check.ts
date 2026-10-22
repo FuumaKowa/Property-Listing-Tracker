@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {LocalWorkflowStore} from '../src/server/workflow/store';
+import {ProductionRunner,type ProductionStorage} from '../src/server/workflow/production-runner';
+import {ProductionError,type RenderedOutput} from '../src/server/workflow/production-renderer';
+import {bucketProductionStorage} from '../src/server/workflow/production-storage';
+const directory=await mkdtemp(join(tmpdir(),'workflow-runner-test-'));
+try{
+  const store=new LocalWorkflowStore(directory);await store.init();
+  const user={id:2,name:'Eypa',role:'coordinator' as const},context={actual:user,effective:user};
+  let w=await store.create({reference:'WTL-RUNNER',property:'Synthetic test',location:'Sepang',category:'Rental',price:'RM1,600',ownerName:'Sample owner',phone:'0120000000',whatsapp:'',sourceUrl:'',details:'',raw:'',permission:true,tasks:[]},context);
+  const save=async(action:any)=>w=await store.action(w.id,store.list().find(x=>x.id===w.id)!.version,action,context);
+  const key=await store.putFile(Buffer.from('source'),'jpg');await save({type:'addMaterial',kind:'photo',title:'Source',original:true,fileKey:key,mime:'image/jpeg'});
+  const accepted=new Set<string>();const uncertain=bucketProductionStorage({put:async key=>{accepted.add(key);throw new Error('Response lost');},get:async()=>null,delete:async key=>{accepted.delete(key);}});
+  await assert.rejects(()=>uncertain.put(w,Buffer.from('media'),'jpg','image/jpeg'));assert.equal(accepted.size,0,'An ambiguous upload removes the known new object');
+  const start=()=>save({type:'startProduction',provider:'template'});
+  const storage:ProductionStorage={read:async(_w,key)=>readFile(store.filePath(key)),put:async(_w,data,ext)=>store.putFile(data,ext),remove:async(_w,key)=>store.removeFile(key)};
+  const rendered:RenderedOutput[]=[{kind:'copy',title:'Copy',text:'Sample'},{kind:'poster',title:'Poster',data:Buffer.from('poster'),extension:'jpg',mime:'image/jpeg'},{kind:'video',title:'Video',data:Buffer.from('video'),extension:'mp4',mime:'video/mp4'}];
+  let calls=0;
+  const renderer=async()=>{calls++;return rendered;};
+  await start();
+  const runner=new ProductionRunner(store,storage,{},renderer),competitor=new ProductionRunner(store,storage,{},renderer);
+  await Promise.all([runner.tick(),competitor.tick()]);w=store.list().find(x=>x.id===w.id)!;
+  assert.equal(calls,1);assert.equal(w.production?.status,'complete');assert.equal(w.materials.length,4);
+  await runner.tick();assert.equal(calls,1);
+  // A bad claim at the front of the queue does not starve a subsequent valid job.
+  await start();const broken={...w,id:'unclaimable'};
+  const mixed={list:()=>[broken,...store.list()],action:async(id:string,version:number,action:any,ctx:any)=>{if(id===broken.id)throw new Error('Broken job');return store.action(id,version,action,ctx);}};
+  await new ProductionRunner(mixed,storage,{},renderer).tick();w=store.list().find(x=>x.id===w.id)!;assert.equal(w.production?.status,'complete');
+  const materialCount=w.materials.length;
+  await start();
+  const stale=new ProductionRunner(store,storage,{},async()=>{await save({type:'saveBrief',brief:{...w.brief,price:'RM1,700'}});return rendered;});
+  await stale.tick();w=store.list().find(x=>x.id===w.id)!;assert.equal(w.production?.status,'cancelled');assert.equal(w.materials.length,materialCount);
+  await start();
+  const failing=new ProductionRunner(store,storage,{},async()=>{throw new ProductionError('OpenAI quota reached.');});
+  await failing.tick();w=store.list().find(x=>x.id===w.id)!;assert.equal(w.production?.status,'failed');assert.equal(w.production?.error,'OpenAI quota reached.');
+  await start();
+  const restarted=new LocalWorkflowStore(directory);await restarted.init();
+  await new ProductionRunner(restarted,storage,{},renderer).tick();w=restarted.list().find(x=>x.id===w.id)!;assert.equal(w.production?.status,'complete');assert.equal(w.materials.length,materialCount+3);assert.equal(w.materials.filter(m=>m.replacedBy).length,materialCount-1);
+  console.log('Worker concurrency, stale results, failure, retry and restart checks passed.');
+}finally{await rm(directory,{recursive:true,force:true});}

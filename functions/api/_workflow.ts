@@ -78,7 +78,9 @@ export async function handleWorkflow({request,env}:{request:Request;env:Workflow
    const data=await body(request,30*1024*1024),mime=request.headers.get('Content-Type')?.split(';')[0]||'',extension=fileExtension(data,mime),kind=url.searchParams.get('kind') as 'photo'|'poster'|'video';
    if(!['photo','poster','video'].includes(kind)||(kind==='video')!==mime.startsWith('video/'))return response({error:'Choose the matching material type.'},400);
    const key=crypto.randomUUID()+'.'+extension,objectKey=`${upload[1]}/${key}`;
-   try{await media.put(objectKey,data,{httpMetadata:{contentType:mime}});return response({listing:await store.action(upload[1],Number(url.searchParams.get('version')),{type:'addMaterial',kind,title:url.searchParams.get('title')||'Uploaded material',fileKey:key,mime,original:url.searchParams.get('original')==='true',replacesId:url.searchParams.get('replacesId')||undefined},context)});}
+   const generated=url.searchParams.get('generated')==='true';
+   if(generated&&(kind!=='poster'||actual.role!=='super_admin'&&effective.role!=='coordinator'))return response({error:'Only a coordinator can save automatically generated posters.'},403);
+   try{await media.put(objectKey,data,{httpMetadata:{contentType:mime}});return response({listing:await store.action(upload[1],Number(url.searchParams.get('version')),{type:'addMaterial',kind,title:url.searchParams.get('title')||'Uploaded material',fileKey:key,mime,original:url.searchParams.get('original')==='true',generated,replacesId:url.searchParams.get('replacesId')||undefined},context)});}
    catch(error){await media.delete(objectKey).catch(()=>{});throw error;}
   }
   if(request.method!=='POST')return response({error:'Workflow route not found.'},404);

@@ -5,7 +5,7 @@ export function LinkedWorkflowDetails({listingId,ownerId}:{listingId?:number;own
  const {workflowEnabled}=useAuth(),[workflow,setWorkflow]=useState<WorkflowListing|null>(null),[error,setError]=useState('');
  useEffect(()=>{setWorkflow(null);setError('');if(!workflowEnabled)return;let active=true;void(async()=>{try{const session=await fetch('/api/workflow/session');if(!session.ok)return;const r=await fetch(`/api/workflow/listing-link?listingId=${listingId||0}&ownerId=${ownerId||0}`);if(!r.ok)throw new Error('Workflow details could not be loaded.');const data=await r.json();if(active)setWorkflow(data.listing);}catch(e){if(active)setError((e as Error).message);}})();return()=>{active=false;};},[workflowEnabled,listingId,ownerId]);
  if(error)return <p className="mt-4 text-sm text-amber-700">{error}</p>;if(!workflow)return null;
- const b=workflow.brief,materials=workflow.materials.filter(m=>!m.replacedBy&&!m.original&&m.review==='approved');
+ const b=workflow.brief,materials=workflow.materials.filter(m=>!m.replacedBy&&!m.archivedAt&&!m.original&&m.review==='approved');
  return <section className="my-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Marketing workflow · {b.reference}</h3><a className="text-sm text-indigo-700 underline" href={`/workflow?id=${workflow.id}`}>Open workflow</a></div>
   <p className="mt-2 text-sm">Owner: {b.ownerName||'Pending'} · {b.phone||'Contact pending'}</p>{b.price&&<p className="text-sm">Asking price: {b.price}</p>}
   {b.details&&<p className="mt-2 whitespace-pre-wrap text-sm">{b.details}</p>}

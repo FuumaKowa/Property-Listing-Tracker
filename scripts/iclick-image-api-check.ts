@@ -26,4 +26,3 @@ assert.equal((await call(`listings/8/images/${uploadedKey}`,'DELETE',undefined,{
 assert.equal((await call(`listings/8/images/${uploadedKey}`,'DELETE')).status,200);assert.equal(objects.size,1,'Pre-existing listing image remains untouched');
 failInsert=true;const orphan=await call('listings/8/images','POST',png,{'Cookie':'session=ok','Content-Type':'image/png','X-File-Name':'Kitchen'});assert.equal(orphan.status,500);assert.equal(objects.size,1,'Metadata failure removes the just-uploaded object but preserves existing images');
 console.log('PASS IClick workspace auth, active category listing isolation, private image upload/stream/delete and failure cleanup');
-

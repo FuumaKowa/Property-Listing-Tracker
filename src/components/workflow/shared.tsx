@@ -1,8 +1,8 @@
 import React from 'react';
 import {Building2,FileText,Film,Image as ImageIcon,Download} from 'lucide-react';
 import type {WorkflowUser,WorkflowListing,WorkflowAction,Material,MaterialKind} from '../../workflow/model';
-export interface WorkflowSession {actual:WorkflowUser;effective:WorkflowUser;csrf:string;users:WorkflowUser[];localPreview:boolean;production?:{enabled:boolean;openaiReady:boolean}}
-export interface PanelProps {listing:WorkflowListing;session:WorkflowSession;busy:boolean;onAction:(action:WorkflowAction)=>Promise<boolean>;onDirty:(dirty:boolean,key?:string)=>void;onUploadMany?:(files:File[])=>Promise<number>;onUpload?:(file:File,fields:{kind:MaterialKind;title:string;original:boolean;replacesId?:string})=>Promise<boolean>}
+export interface WorkflowSession {actual:WorkflowUser;effective:WorkflowUser;csrf:string;users:WorkflowUser[];localPreview:boolean;storageReady?:boolean;production?:{enabled:boolean;openaiReady:boolean}}
+export interface PanelProps {listing:WorkflowListing;session:WorkflowSession;busy:boolean;onAction:(action:WorkflowAction)=>Promise<boolean>;onDirty:(dirty:boolean,key?:string)=>void;onUploadMany?:(files:File[])=>Promise<number>;onGeneratePackage?:(posters:Array<{file:File;title:string}>,copies:string[])=>Promise<boolean>;onUpload?:(file:File,fields:{kind:MaterialKind;title:string;original:boolean;replacesId?:string})=>Promise<boolean>}
 export const roleLabels:Record<string,string>={super_admin:'SuperAdmin',coordinator:'Owner coordination',producer:'Creative production',reviewer:'Workflow observer',publisher:'Publishing',viewer:'View workflow'};
 export function timeLabel(date:string){return new Date(date).toLocaleString('en-MY',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});}
 export function Badge({children,tone='slate'}:{children:React.ReactNode;tone?:string}){return <span className={`wf-badge wf-badge-${tone}`}>{children}</span>;}

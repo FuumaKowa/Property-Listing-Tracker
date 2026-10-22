@@ -33,7 +33,7 @@ export default function App() {
 }
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
-  if ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV && new URLSearchParams(window.location.search).get('preview') === 'iclick') {
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'iclick') {
     return <Suspense fallback={<div className="p-8 text-sm text-slate-600">Opening local IClick preview…</div>}><IclickWorkspace preview/></Suspense>;
   }
   if (loading) {
@@ -158,7 +158,7 @@ function Workspace() {
     const original = editingListing;
     let saved: PropertyListing;
     if (original) {
-      const fields = ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'] as const;
+      const fields = ['property','projectCategory','location','tenure','pm','negotiator','agent','noTel','availableUnits','askingPrice','status','date','renewStatus','notes','propertyGuruRepostDate','propertyGuruRepostMode','isPriority'] as const;
       const changes = Object.fromEntries(fields.filter(key => checked[key] !== original[key]).map(key => [key, checked[key]]));
       if (Object.keys(changes).length === 0) return;
       saved = await updateListingInCloudSql(original.id, {...changes,version:original.version}, token, userName);

@@ -43,7 +43,15 @@ try {
   for (const [width, height] of [[320,568], [390,844], [667,375], [768,1024], [1024,768], [1920,1080]]) {
     await page.setViewportSize({ width, height });
     await page.goto('http://127.0.0.1:3000');
+    await page.getByRole('button', { name: 'Hide listing search and filters', exact: true }).click();
+    await page.getByLabel('Search properties', { exact: true }).waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: 'Show listing search and filters', exact: true }).click();
+    await page.getByLabel('Search properties', { exact: true }).waitFor();
     await ownerTab();
+    await page.getByRole('button', { name: 'Hide owner search and filters', exact: true }).click();
+    await page.getByLabel('Search owner listings', { exact: true }).waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: 'Show owner search and filters', exact: true }).click();
+    await page.getByLabel('Search owner listings', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Add owner listing', exact: true }).click();
     const form = page.getByRole('dialog');
     await form.getByLabel('Owner name', { exact: true }).fill('Test Owner');

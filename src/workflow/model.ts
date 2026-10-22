@@ -10,7 +10,7 @@ export interface Brief {
 }
 export interface Material {
   id:string; kind:MaterialKind; title:string; revision:number; original:boolean;
-  fileKey?:string; mime?:string; text?:string; replacesId?:string; replacedBy?:string; productionId?:string;
+  fileKey?:string; mime?:string; text?:string; replacesId?:string; replacedBy?:string; productionId?:string; archivedAt?:string; archivedBy?:string;
   review:'draft'|'submitted'|'approved'|'changes'; note:string; at:string; by:string;
 }
 export interface Destination {
@@ -49,7 +49,9 @@ export type WorkflowStage=typeof workflowStages[number];
 export type WorkflowAction = ProductionAction
   | {type:'saveBrief';brief:Brief}
   | {type:'handoff'}
-  | {type:'addMaterial';kind:MaterialKind;title:string;text?:string;fileKey?:string;mime?:string;original?:boolean;replacesId?:string}
+  | {type:'addMaterial';kind:MaterialKind;title:string;text?:string;fileKey?:string;mime?:string;original?:boolean;generated?:boolean;replacesId?:string}
+  | {type:'addGeneratedCopy';title:string;text:string;replacesId?:string}
+  | {type:'removeMaterial';id:string}
   | {type:'submit';ids:string[]}
   | {type:'review';ids:string[];approved:boolean;note?:string}
   | {type:'addDestination'|'removeDestination';channelId:string}
@@ -116,7 +118,7 @@ export function workflowStage(w:WorkflowListing):WorkflowStage {
   if(w.production&&['failed','cancelled'].includes(w.production.status))return 'On hold';
   if(allPublished(w))return w.sentReports.some(r=>r.final&&r.signature===reportSignature(w))?'Owner informed':'Owner update';
   if(w.destinations.some(d=>d.approval||d.publications.length))return 'Publishing';
-  if(w.materials.some(m=>!m.replacedBy&&!m.original&&['submitted','approved'].includes(m.review)))return 'Publishing';
+  if(w.materials.some(m=>!m.replacedBy&&!m.archivedAt&&!m.original&&['submitted','approved'].includes(m.review)))return 'Publishing';
   return 'Production';
 }
 export function ownerReport(w:WorkflowListing):string {
@@ -139,7 +141,7 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
   const w=structuredClone(source),now=new Date().toISOString();let message='';
   const permit=(role:keyof WorkflowListing['assignees'])=>requireThat(canWork(context.effective,w,role),`You do not have permission for this ${role} action.`);
   const destination=(id:string)=>{const d=w.destinations.find(d=>d.channelId===id);requireThat(d,'Select a planned destination.');return d;};
-  const materials=(ids:string[])=>{requireThat(Array.isArray(ids)&&ids.length>0&&ids.length<=100&&new Set(ids).size===ids.length,'Select at least one unique material.');return ids.map(id=>{const m=w.materials.find(m=>m.id===id);requireThat(m&&!m.replacedBy&&!m.original,'Select current prepared materials.');return m;});};
+  const materials=(ids:string[])=>{requireThat(Array.isArray(ids)&&ids.length>0&&ids.length<=100&&new Set(ids).size===ids.length,'Select at least one unique material.');return ids.map(id=>{const m=w.materials.find(m=>m.id===id);requireThat(m&&!m.replacedBy&&!m.archivedAt&&!m.original,'Select current prepared materials.');return m;});};
   const invalidate=(ids?:string[])=>{for(const d of w.destinations)if(d.approval&&(!ids||d.approval.materialIds.some(id=>ids.includes(id))))d.approval=null;};
   const setDestinations=(channelIds:string[])=>{
     requireThat(Array.isArray(channelIds)&&channelIds.length<=workflowChannels.length&&new Set(channelIds).size===channelIds.length,'Select unique publishing destinations.');
@@ -164,16 +166,37 @@ export function applyWorkflowAction(source:WorkflowListing,action:WorkflowAction
       requireThat(w.brief.location&&w.brief.ownerName&&w.brief.phone,'Fill in location, owner name and contact before handing off.');
       w.handedOffAt=now;message='Sent owner brief to Luqman for production';break;
     case 'addMaterial':{
-      if(action.original)requireThat(canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer'),'Only the coordinator or producer can upload original materials.');else permit('producer');
+      const generated=action.generated===true;
+      if(action.original)requireThat(canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer'),'Only the coordinator or producer can upload original materials.');else if(generated){permit('coordinator');requireThat(w.brief.permission&&w.handedOffAt,'Confirm owner permission and hand off the brief before generating materials.');requireThat(action.kind==='poster'&&action.fileKey,'Only a rendered poster file can use the generated material upload.');}else permit('producer');
       requireThat(action.original||w.handedOffAt,'Send the brief to production first.');
       requireThat(['photo','poster','video','copy'].includes(action.kind),'Choose a valid material type.');
       const title=value(action.title,'Material title',200,true),text=action.kind==='copy'?value(action.text,'Copywriting',20000,true):undefined;
       requireThat(action.kind==='copy'||(typeof action.fileKey==='string'&&action.fileKey.length>0),'Upload a file for this material.');
       const old=action.replacesId?w.materials.find(m=>m.id===action.replacesId):undefined;
-      if(action.replacesId)requireThat(old&&!old.replacedBy&&old.kind===action.kind&&old.original===!!action.original,'Replace the current version of the same material type.');
+      if(action.replacesId)requireThat(old&&!old.replacedBy&&!old.archivedAt&&old.kind===action.kind&&old.original===!!action.original,'Replace the current version of the same material type.');
       const id=uid();if(old){old.replacedBy=id;invalidate([old.id]);}
-      w.materials.push({id,kind:action.kind,title,revision:(old?.revision||0)+1,original:!!action.original,fileKey:action.fileKey,mime:action.mime,text,replacesId:old?.id,review:'draft',note:'',at:now,by:context.effective.name});
+      w.materials.push({id,kind:action.kind,title,revision:(old?.revision||0)+1,original:!!action.original,fileKey:action.fileKey,mime:action.mime,text,replacesId:old?.id,review:generated?'approved':'draft',note:generated?'Generated in the browser from supplied listing facts and photos; automatically released to Muz.':'',at:now,by:generated?'Automation':context.effective.name});
       message=`${old?'Revised':'Added'} ${action.kind}: ${title}${old?' (affected publishing packages need updating)':''}`;break;
+    }
+    case 'addGeneratedCopy':{
+      permit('coordinator');requireThat(w.brief.permission&&w.handedOffAt,'Confirm owner permission and hand off the brief before generating materials.');
+      const title=value(action.title,'Material title',200,true),text=value(action.text,'Copywriting',20000,true),old=action.replacesId?w.materials.find(m=>m.id===action.replacesId):undefined;
+      if(action.replacesId)requireThat(old&&!old.replacedBy&&!old.archivedAt&&old.kind==='copy'&&!old.original&&old.by==='Automation','Replace only a current automated copy material.');
+      const id=uid();if(old)old.replacedBy=id;
+      w.materials.push({id,kind:'copy',title,revision:(old?.revision||0)+1,original:false,text,replacesId:old?.id,review:'approved',note:'Generated from supplied listing facts; automatically released to Muz.',at:now,by:'Automation'});
+      message=`Generated copywriting for Muz: ${title}`;break;
+    }
+    case 'removeMaterial':{
+      const material=w.materials.find(m=>m.id===action.id);
+      requireThat(material&&!material.replacedBy&&!material.archivedAt,'Select a current material to remove.');
+      const mayRemove=material.original
+        ?canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer')
+        :canWork(context.effective,w,'coordinator')||canWork(context.effective,w,'producer')||canWork(context.effective,w,'publisher');
+      requireThat(mayRemove,'You do not have permission to remove this material.');
+      material.archivedAt=now;material.archivedBy=context.effective.name;
+      for(const d of w.destinations)if(d.approval?.materialIds.includes(material.id)&&!currentPublication(d))d.approval=null;
+      message=`Removed ${material.kind} from current materials: ${material.title}; history retained`;
+      break;
     }
     case 'submit':
       permit('producer');for(const m of materials(action.ids)){requireThat(['draft','changes'].includes(m.review),'Only draft materials or requested changes can be sent.');m.review='approved';m.note='Automatically released to Muz; no reviewer approval is required.';}

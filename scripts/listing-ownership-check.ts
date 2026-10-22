@@ -13,7 +13,7 @@ assert.deepEqual(validatePriority({isPriority:false}),{isPriority:false});
 for(const isPriority of ['true',1,null])assert.throws(()=>validatePriority({isPriority}));
 const pg=new PGlite();
 try {
- await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp,created_at timestamp DEFAULT now());
+ await pg.exec(`CREATE TABLE listings(id serial PRIMARY KEY,property text,project_category text,location text,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,asking_price numeric(18,2),status text,date text,renew_status text,notes text,updated_by_user_id text,updated_by_name text,updated_by_email text,last_updated_at timestamp,created_at timestamp DEFAULT now());
  CREATE TABLE owner_listings(id serial PRIMARY KEY,property_name text);
  INSERT INTO owner_listings(property_name) VALUES ('Unchanged owner');
  INSERT INTO listings(property,pm,negotiator,agent,updated_by_name) VALUES ('Existing','Old PM','Negotiator','Agent','Last editor');`);

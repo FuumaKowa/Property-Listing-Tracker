@@ -16,7 +16,7 @@ export function createWorkflowRouter(store:LocalWorkflowStore,authenticate:(req:
     next();
   });
   const token=(req:Request)=>(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('workflow_preview='))?.slice('workflow_preview='.length)||'';
-  const payload=(s:Session)=>({actual:s.actual,effective:s.effective,csrf:s.csrf,users:s.actual.role==='super_admin'?previewUsers:[],localPreview:true,production});
+  const payload=(s:Session)=>({actual:s.actual,effective:s.effective,csrf:s.csrf,users:s.actual.role==='super_admin'?previewUsers:[],localPreview:true,storageReady:true,production});
   const safe=(fn:(req:Request,res:Response)=>Promise<unknown>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req,res).catch(next);};
   router.get('/session',safe(async(req,res)=>{
     const now=Date.now();for(const [id,s] of sessions)if(s.expires<now)sessions.delete(id);
@@ -61,7 +61,8 @@ export function createWorkflowRouter(store:LocalWorkflowStore,authenticate:(req:
     const kind=String(req.query.kind) as MaterialKind;
     if(!['photo','poster','video'].includes(kind)||(kind==='video')!==mime.startsWith('video/'))throw new Error('Choose the matching photo, poster or video type.');
     const key=await store.putFile(data,extension);
-    try{return res.json({listing:await store.action(req.params.id,Number(req.query.version),{type:'addMaterial',kind,title:String(req.query.title||'Uploaded material'),fileKey:key,mime,original:req.query.original==='true',replacesId:typeof req.query.replacesId==='string'?req.query.replacesId:undefined},context(res))});}
+    const generated=req.query.generated==='true';if(generated&&kind!=='poster')throw new Error('Only generated posters can use automatic release.');
+    try{return res.json({listing:await store.action(req.params.id,Number(req.query.version),{type:'addMaterial',kind,title:String(req.query.title||'Uploaded material'),fileKey:key,mime,original:req.query.original==='true',generated,replacesId:typeof req.query.replacesId==='string'?req.query.replacesId:undefined},context(res))});}
     catch(e){await store.removeFile(key);throw e;}
   }));
   router.get('/files/:key',(req,res,next)=>{

@@ -17,7 +17,7 @@ async function update(id:number,body:any,action?:string) {
 }
 try {
  await pg.exec(`CREATE TABLE auth_users(id serial PRIMARY KEY,username text,display_name text,role text);INSERT INTO auth_users VALUES(1,'admin','Admin','admin'),(2,'agent','Agent','user');
- CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text NOT NULL,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,status text,date text,renew_status text,notes text,created_by_user_id text,created_by_name text,updated_by_user_id text,updated_by_name text,last_updated_at timestamp,version integer DEFAULT 1,archived_at timestamp,archived_by_name text);
+ CREATE TABLE listings(id serial PRIMARY KEY,property text NOT NULL,project_category text,location text NOT NULL,tenure text,pm text,negotiator text,agent text,no_tel text,available_units text,asking_price numeric(18,2),status text,date text,renew_status text,notes text,created_by_user_id text,created_by_name text,updated_by_user_id text,updated_by_name text,last_updated_at timestamp,version integer DEFAULT 1,archived_at timestamp,archived_by_name text);
  CREATE TABLE listing_audit_logs(id serial PRIMARY KEY,listing_id integer,action text,changed_fields text,user_uid text,user_name text);`);
  await pg.exec('CREATE TABLE listing_publications(id serial PRIMARY KEY,listing_id integer REFERENCES listings(id),url text)');
  await pg.exec(ownerListingsTableSql);
@@ -42,6 +42,7 @@ try {
   assert.ok(listing,'Listed owner must create a category listing');
   assert.equal(listing.project_category,category);assert.equal(listing.no_tel,input.noTel);
   assert.equal(listing.status,'Active');assert.equal(listing.date,'','Do not invent an expiry date');assert.equal(listing.created_by_user_id,'1');
+  assert.equal(listing.asking_price,'380000.25','Promotion carries the numeric owner price to the category listing');
   assert.ok(listing.notes.includes('380000.25'));assert.ok(listing.notes.includes(input.propertyLink));
   await pg.query('INSERT INTO listing_publications(listing_id,url) VALUES($1,$2)',[listing.id,'https://example.com/saved-ad']);
   assert.equal((await update(owner.id,{status:'Unlisted'},'activity')).status,200);

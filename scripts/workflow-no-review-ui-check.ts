@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {chromium,expect} from '@playwright/test';
+import {spawn} from 'node:child_process';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const directory=await mkdtemp(join(tmpdir(),'workflow-browser-production-'));
+const port='4195',base=`http://127.0.0.1:${port}`;
+const server=spawn(process.execPath,['--import','tsx','scripts/local-workflow-preview.ts'],{cwd:process.cwd(),env:{...process.env,PREVIEW_PORT:port,WORKFLOW_PREVIEW_DIR:directory},stdio:'pipe',windowsHide:true});
+let output='';server.stdout.on('data',d=>output+=d);server.stderr.on('data',d=>output+=d);
+const browser=await chromium.launch({channel:'msedge',headless:true});
+try{
+  let ready=false;for(let i=0;i<90;i++){try{if((await fetch(base+'/api/auth/me')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}assert.ok(ready,output);
+  const page=await browser.newPage({viewport:{width:1280,height:900}});page.on('dialog',d=>void d.accept());
+  await page.goto(base+'/workflow');await page.getByLabel('View as').selectOption('2');await page.getByRole('button',{name:'New listing workflow',exact:true}).click();
+  await page.getByLabel('Reference',{exact:true}).fill('WTS-202610-92999');await page.getByLabel('Property',{exact:true}).fill('No Approval Test');await page.getByLabel('Location',{exact:true}).fill('Shah Alam');await page.getByLabel('Owner name',{exact:true}).fill('Private Sample Owner');await page.getByLabel('Phone number',{exact:true}).fill('0123456789');await page.getByLabel('Asking price',{exact:true}).fill('RM500,000');await page.getByLabel(/Owner has given permission/).check();await page.getByRole('button',{name:'Create workflow',exact:true}).click();
+  await page.getByRole('button',{name:'Production',exact:true}).click();
+  const image=Buffer.from(await page.evaluate(async()=>{const c=document.createElement('canvas');c.width=120;c.height=80;const ctx=c.getContext('2d')!;ctx.fillStyle='#657f76';ctx.fillRect(0,0,120,80);const b=await new Promise<Blob>(resolve=>c.toBlob(x=>resolve(x!),'image/png'));return Array.from(new Uint8Array(await b.arrayBuffer()));}));
+  await page.getByLabel('Choose photos').setInputFiles([{name:'Owner original photo.png',mimeType:'image/png',buffer:image},{name:'Owner backup photo.png',mimeType:'image/png',buffer:image}]);
+  await page.getByRole('button',{name:'Save 2 photos',exact:true}).click();await expect(page.getByText('Owner backup photo.png',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Remove original photo Owner original photo.png',exact:true}).click();await expect(page.getByText('Owner original photo.png',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Brief',exact:true}).click();await page.getByRole('button',{name:'Send to production',exact:true}).click();await expect(page.getByRole('status')).toContainText('Sent owner brief');
+  await page.getByRole('button',{name:'Production',exact:true}).click();await page.getByRole('button',{name:'Use Soft editorial poster style',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Generate posters & copy for Muz',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Generate posters & copy for Muz',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Generated portrait and square posters plus 3 copy formats',{timeout:15000});
+  await expect(page.getByText('Portrait poster · Soft editorial',{exact:true})).toBeVisible();await expect(page.getByText('Square poster · Soft editorial',{exact:true})).toBeVisible();
+  await expect(page.getByText('Portal listing copy',{exact:true})).toBeVisible();await expect(page.getByText('Private Sample Owner',{exact:true})).toHaveCount(0);
+  await page.getByLabel('View as').selectOption('4');await expect(page.getByText('Publishing',{exact:true}).first()).toBeVisible();await expect(page.getByRole('button',{name:'Choose platforms',exact:true})).toHaveCount(0);
+  await page.getByLabel('View as').selectOption('5');await expect(page.getByRole('button',{name:'Send selected platforms to publishing',exact:true})).toBeVisible();
+  await page.getByLabel('Publish on Facebook Page Rumahlot',{exact:true}).check();await page.getByLabel('Publish on TikTok',{exact:true}).check();await page.getByRole('button',{name:'Send selected platforms to publishing',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Muz selected 1 ready publishing destination(s)');await expect(page.getByRole('article',{name:'TikTok',exact:true})).toContainText('Awaiting materials');
+  await page.close();console.log('PASS browser generation, local private-file persistence, no owner PII in copy, automatic Muz readiness and video-dependent TikTok gating.');
+}finally{await browser.close();if(server.exitCode===null){server.kill();await Promise.race([new Promise(r=>server.once('exit',r)),new Promise(r=>setTimeout(r,1500))]);}await rm(directory,{recursive:true,force:true});}

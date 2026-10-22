@@ -34,7 +34,7 @@ async function audit(db:WorkflowDb,table:string,before:any,after:any,context:Wor
  else await db.query("INSERT INTO listing_audit_logs(listing_id,action,changed_fields,user_uid,user_name) VALUES($1,'marketing_workflow',$2,$3,$4)",[after.id,JSON.stringify(payload),String(context.effective.id),context.effective.name]);
 }
 function workflowInformation(w:WorkflowListing){
- const b=w.brief,approved=w.materials.filter(m=>!m.replacedBy&&!m.original&&m.review==='approved');
+ const b=w.brief,approved=w.materials.filter(m=>!m.replacedBy&&!m.archivedAt&&!m.original&&m.review==='approved');
  const complete=w.destinations.flatMap(d=>d.publications.length?[`${workflowChannels.find(c=>c.id===d.channelId)?.name}: ${d.publications[0].url||'Done'}`]:[]);
  return [`Reference: ${b.reference}`,b.ownerName&&`Owner: ${b.ownerName}`,b.phone&&`Contact: ${b.phone}`,b.price&&`Price: ${b.price}`,b.sourceUrl&&`Original listing: ${b.sourceUrl}`,b.whatsapp&&`Owner WhatsApp: ${b.whatsapp}`,b.details,b.raw&&`Owner briefing:\n${b.raw}`,approved.length&&'Approved materials:',...approved.map(m=>m.kind==='copy'?`${m.title} (v${m.revision}):\n${m.text}`:`${m.title} (v${m.revision}): /api/workflow/files/${m.fileKey}`),...complete].filter(Boolean).join('\n');
 }

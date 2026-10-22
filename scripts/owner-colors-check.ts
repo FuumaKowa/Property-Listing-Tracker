@@ -10,4 +10,3 @@ for(const stage of stages){
 }
 assert.equal(new Set(OWNER_ROW_TONES.map(value=>value.classes)).size,8,'All eight states have distinct whole-row colours');
 console.log('PASS owner colours: all stages, Listed/Rejected precedence, distinct tones, immutable records');
-

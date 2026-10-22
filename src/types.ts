@@ -37,6 +37,7 @@ export interface PropertyListing {
   agent?: string;
   noTel?: string;
   availableUnits: string;
+  askingPrice?: string | null;
   status: ListingStatus;
   date: string;
   propertyGuruRepostDate?: string | null;

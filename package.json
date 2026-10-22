@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:automation": "tsx scripts/workflow-automation-check.ts && tsx scripts/workflow-render-check.ts && tsx scripts/workflow-runner-check.ts && tsx scripts/workflow-browser-production-check.ts && tsx scripts/workflow-no-review-ui-check.ts",
+    "test:iclick": "tsx scripts/iclick-api-check.ts && tsx scripts/iclick-image-api-check.ts",
+    "test:iclick-ui": "tsx scripts/iclick-workspace-ui-check.ts",
+    "worker:production": "tsx scripts/workflow-production-worker.ts",
     "preview:workflow": "tsx scripts/local-workflow-preview.ts",
     "test:workflow": "tsx scripts/workflow-check.ts && tsx scripts/workflow-no-review-check.ts && tsx scripts/workflow-bulk-check.ts && tsx scripts/workflow-api-check.ts && tsx scripts/workflow-sync-check.ts && tsx scripts/workflow-production-check.ts && tsx scripts/workflow-storage-check.ts",
     "dev": "tsx server.ts",
@@ -34,8 +38,7 @@
     "test:owner-summary": "tsx scripts/owner-summary-report-check.ts && tsx scripts/owner-summary-api-check.ts",
     "test:owner-colors": "tsx scripts/owner-colors-check.ts",
     "test:listing-reports": "tsx scripts/listing-report-location-check.ts && tsx scripts/listing-location-audit-check.ts && tsx scripts/listing-report-create-check.ts",
-    "audit:listing-locations": "tsx scripts/audit-listing-locations.ts",
-    "test:iclick": "tsx scripts/iclick-api-check.ts"
+    "audit:listing-locations": "tsx scripts/audit-listing-locations.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
@@ -48,11 +51,13 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
+    "ffmpeg-static": "^5.3.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "pg": "^8.23.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "sharp": "^0.34.5",
     "vite": "^6.2.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
