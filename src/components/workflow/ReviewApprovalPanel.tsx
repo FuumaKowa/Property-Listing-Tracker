@@ -4,10 +4,10 @@ import {currentPublication,publicationPackage,workflowChannels} from '../../work
 import {Badge,MaterialPreview,type PanelProps} from './shared';
 
 export function ReviewApprovalPanel({listing:w,busy,onAction,onDirty}:PanelProps){
-  const current=w.materials.filter(m=>!m.replacedBy&&!m.original);
+  const current=w.materials.filter(m=>!m.replacedBy);
   const [channelIds,setChannelIds]=useState<string[]>(()=>w.destinations.length||w.destinationSelectionSaved?w.destinations.map(d=>d.channelId):[]);
-  const [materialIds,setMaterialIds]=useState<string[]>(()=>current.filter(m=>m.review==='approved'||(m.review==='submitted'&&m.kind!=='video')).map(m=>m.id));
-  const chosen=current.filter(m=>materialIds.includes(m.id)&&['submitted','approved'].includes(m.review));
+  const [materialIds,setMaterialIds]=useState<string[]>(()=>current.filter(m=>!m.original&&(m.review==='approved'||(m.review==='submitted'&&m.kind!=='video'))).map(m=>m.id));
+  const chosen=current.filter(m=>!m.original&&materialIds.includes(m.id)&&['submitted','approved'].includes(m.review));
   const pendingChannels=channelIds.filter(id=>!w.destinations.find(d=>d.channelId===id)?.approval);
   const ready=pendingChannels.filter(id=>publicationPackage(id,chosen).length>0);
   const waiting=pendingChannels.length-ready.length;
@@ -35,14 +35,14 @@ export function ReviewApprovalPanel({listing:w,busy,onAction,onDirty}:PanelProps
         <div className="wf-platform-save"><p>Save choices now if materials are still being prepared.</p><button className="wf-button" disabled={busy||sameChoices} onClick={save}>Save platform choices</button></div>
       </div>
       <div className="wf-panel">
-        <div className="wf-review-section-title"><span>2</span><div><h3>Choose prepared materials</h3><p>All submitted materials are available to Muz automatically; video platforms need a video and copy.</p></div></div>
-        {!current.length&&<p className="wf-empty-small">Luqman has not added prepared materials yet.</p>}
+        <div className="wf-review-section-title"><span>2</span><div><h3>Choose materials</h3><p>Owner originals and prepared assets appear together. Originals are for reference; select prepared materials to publish. Video platforms need a video and copy.</p></div></div>
+        {!current.length&&<p className="wf-empty-small">No owner or prepared materials have been added yet.</p>}
         <div className="wf-review-materials">{current.map(m=>{
-          const eligible=['submitted','approved'].includes(m.review),selected=materialIds.includes(m.id)&&eligible;
+          const eligible=!m.original&&['submitted','approved'].includes(m.review),selected=materialIds.includes(m.id)&&eligible;
           return <article className={`wf-material-card ${selected?'wf-selected':''}`} key={m.id}>
-            <label className="wf-material-heading"><input type="checkbox" aria-label={`Use ${m.title}`} checked={selected} disabled={busy||!eligible} onChange={e=>{setMaterialIds(ids=>e.target.checked?[...ids,m.id]:ids.filter(id=>id!==m.id));onDirty(true,'review-materials');}}/><div><h4>{m.title}</h4><span>{m.kind} · version {m.revision}</span></div><Badge tone={['approved','submitted'].includes(m.review)?'green':'slate'}>{['approved','submitted'].includes(m.review)?'Ready for Muz':'Not submitted'}</Badge></label>
+            <label className="wf-material-heading"><input type="checkbox" aria-label={`Use ${m.title}`} checked={selected} disabled={busy||!eligible} onChange={e=>{setMaterialIds(ids=>e.target.checked?[...ids,m.id]:ids.filter(id=>id!==m.id));onDirty(true,'review-materials');}}/><div><h4>{m.title}</h4><span>{m.kind} · version {m.revision}</span></div><Badge tone={m.original?'slate':eligible?'green':'slate'}>{m.original?'Owner original':eligible?'Ready for Muz':'Not submitted'}</Badge></label>
           <MaterialPreview material={m} compact/>
-            {!eligible&&<p className="wf-material-wait">{m.review==='changes'?'Luqman needs to revise and send this material.':'Luqman needs to submit this material to Muz.'}</p>}
+            {!eligible&&!m.original&&<p className="wf-material-wait">{m.review==='changes'?'Luqman needs to revise and send this material.':'Luqman needs to submit this material to Muz.'}</p>}{m.original&&<p className="wf-material-wait">Owner-supplied reference asset. Prepared materials are selected for publishing.</p>}
           </article>;
         })}</div>
       </div>
